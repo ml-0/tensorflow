@@ -76,7 +76,7 @@ ifeq ($(TARGET),$(filter $(TARGET),\
   $(CMSIS_SRC_DIR)/StatisticsFunctions/arm_mean_q15.c \
   $(CMSIS_SRC_DIR)/StatisticsFunctions/arm_max_q7.c
 
-  # These are tests that don't currently work on the generic Coretax-M4F.
+  # These are tests that don't currently work on the generic cortex-m4f.
   EXCLUDED_TESTS :=
   MICROLITE_TEST_SRCS := $(filter-out $(EXCLUDED_TESTS), $(MICROLITE_TEST_SRCS))
 
