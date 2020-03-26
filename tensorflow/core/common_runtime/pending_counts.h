@@ -208,25 +208,21 @@ class PendingCounts {
     }
   }
 
-  struct AdjustResult {
-    bool any_dead;
-    bool any_pending;
-
-    AdjustResult(bool any_dead, bool any_pending)
-        : any_dead(any_dead), any_pending(any_pending) {}
-  };
-
   // A streamlined routine that does several pieces of bookkeeping at
   // once.  Equivalent to:
   //    if (increment_dead) increment_dead_count(h);
   //    decrement_pending(h, 1);
-  //    return {dead_count(h) > 0, pending(h) > 0};
-  AdjustResult adjust_for_activation(Handle h, bool increment_dead) {
+  //    *pending_result = pending(h);
+  //    *dead_result = dead_count(h);
+  void adjust_for_activation(Handle h, bool increment_dead, int* pending_result,
+                             int* dead_result) {
     DCHECK_GE(pending(h), 1);
     if (h.is_large_) {
-      return adjust_for_activation_shared(Large(h), increment_dead);
+      adjust_for_activation_shared(Large(h), increment_dead, pending_result,
+                                   dead_result);
     } else {
-      return adjust_for_activation_shared(Packed(h), increment_dead);
+      adjust_for_activation_shared(Packed(h), increment_dead, pending_result,
+                                   dead_result);
     }
   }
 
@@ -242,12 +238,17 @@ class PendingCounts {
 
  private:
   template <typename T>
-  inline AdjustResult adjust_for_activation_shared(T* c, bool increment_dead) {
-    if (increment_dead && PENDING_NOTREADY == NodeStateForStruct(c)) {
-      c->dead_count++;
+  inline void adjust_for_activation_shared(T* c, bool increment_dead,
+                                           int* pending_result,
+                                           int* dead_result) {
+    if (increment_dead) {
+      if (PENDING_NOTREADY == NodeStateForStruct(c)) {
+        c->dead_count++;
+      }
     }
     c->pending -= 1;
-    return AdjustResult(c->dead_count, c->pending);
+    *dead_result = c->dead_count;
+    *pending_result = c->pending;
   }
 
   // We keep track of the pending count and dead input count for each

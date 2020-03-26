@@ -81,9 +81,6 @@ def start(logdir):
                       'server and profiler APIs at the same time.')
       raise errors.AlreadyExistsError(None, None,
                                       'Another profiler is running.')
-    except Exception:
-      _profiler = None
-      raise
 
 
 @tf_export('profiler.experimental.stop', v1=[])
@@ -105,11 +102,7 @@ def stop(save=True):
           None, None,
           'Cannot export profiling results. No profiler is running.')
     if save:
-      try:
-        _profiler.export_to_tb()
-      except Exception:
-        _profiler = None
-        raise
+      _profiler.export_to_tb()
     _profiler = None
 
 
@@ -134,8 +127,12 @@ def start_server(port):
 
   Args:
     port: port profiler server listens to.
-  Example usage: ```python tf.profiler.experimental.server.start('6009') # do
-    your training here.
+
+  Example usage:
+  ```python
+  tf.profiler.experimental.server.start('6009')
+  # do your training here.
+
   """
   _pywrap_profiler.start_server(port)
 

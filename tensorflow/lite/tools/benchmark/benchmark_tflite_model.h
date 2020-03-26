@@ -69,6 +69,11 @@ class BenchmarkTfLiteModel : public BenchmarkModel {
 
   int64_t MayGetModelFileSize() override;
 
+  // Allow subclasses to create custom delegates to be applied during init.
+  using TfLiteDelegatePtr = tflite::Interpreter::TfLiteDelegatePtr;
+  using TfLiteDelegatePtrMap = std::map<std::string, TfLiteDelegatePtr>;
+  virtual TfLiteDelegatePtrMap GetDelegates() const;
+
   virtual TfLiteStatus LoadModel();
 
   // Allow subclasses to create a customized Op resolver during init.
@@ -84,13 +89,10 @@ class BenchmarkTfLiteModel : public BenchmarkModel {
   std::unique_ptr<tflite::Interpreter> interpreter_;
 
  private:
-  // Implement type erasure with unique_ptr with custom deleter.
-  using VoidUniquePtr = std::unique_ptr<void, void (*)(void*)>;
-
   struct InputTensorData {
     InputTensorData() : data(nullptr, nullptr) {}
 
-    VoidUniquePtr data;
+    std::unique_ptr<void, void (*)(void*)> data;
     size_t bytes;
   };
 
@@ -103,8 +105,11 @@ class BenchmarkTfLiteModel : public BenchmarkModel {
     std::generate_n(raw, num_elements, [&]() {
       return static_cast<T>(distribution(random_engine_));
     });
-    tmp.data = VoidUniquePtr(static_cast<void*>(raw),
-                             [](void* ptr) { delete[] static_cast<T*>(ptr); });
+    // Now initialize the type-erased unique_ptr (with custom deleter) from
+    // 'raw'.
+    tmp.data = std::unique_ptr<void, void (*)(void*)>(
+        static_cast<void*>(raw),
+        [](void* ptr) { delete[] static_cast<T*>(ptr); });
     return tmp;
   }
 
@@ -118,10 +123,9 @@ class BenchmarkTfLiteModel : public BenchmarkModel {
   std::vector<InputTensorData> inputs_data_;
   std::unique_ptr<BenchmarkListener> profiling_listener_ = nullptr;
   std::unique_ptr<BenchmarkListener> ruy_profiling_listener_ = nullptr;
+  TfLiteDelegatePtrMap delegates_;
+
   std::mt19937 random_engine_;
-  std::vector<Interpreter::TfLiteDelegatePtr> owned_delegates_;
-  // Always TFLITE_LOG the benchmark result.
-  BenchmarkLoggingListener log_output_;
 };
 
 }  // namespace benchmark

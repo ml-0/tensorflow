@@ -14,6 +14,7 @@ the model to the XNNPACK delegate. The users must destroy the delegate with
 `TfLiteXNNPackDelegateDelete` **after** releasing the TensorFlow Lite
 interpreter. The snippet below illustrates the typical usage:
 
+
 ```c++
 // Build the interpreter
 std::unique_ptr<tflite::Interpreter> interpreter;
@@ -39,7 +40,7 @@ interpreter->Invoke()
 
 ...
 
-// IMPORTANT: release the interpreter before destroying the delegate
+// IMPORTANT: release the interpreter before destroing the delegate
 interpreter.reset();
 TfLiteXNNPackDelegateDelete(xnnpack_delegate);
 ```

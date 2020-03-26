@@ -1,5 +1,3 @@
-load("//tensorflow/lite:build_def.bzl", "tflite_copts", "tflite_linkopts")
-
 package(
     default_visibility = [
         "//visibility:public",
@@ -7,13 +5,13 @@ package(
     licenses = ["notice"],  # Apache 2.0
 )
 
+load("//tensorflow/lite:build_def.bzl", "tflite_copts", "tflite_linkopts")
+
 common_linkopts = tflite_linkopts() + select({
-    "//tensorflow:android": [
-        "-pie",  # Android 5.0 and later supports only PIE
-        "-lm",  # some builtin ops, e.g., tanh, need -lm
-        "-Wl,--rpath=/data/local/tmp/",  # Hexagon delegate libraries should be in /data/local/tmp
-    ],
     "//conditions:default": [],
+    "//tensorflow:android": [
+        "-pie",
+    ],
 })
 
 cc_binary(
@@ -25,7 +23,6 @@ cc_binary(
         "//tensorflow/core:tflite_portable_logging",
         "//tensorflow/lite/c:common",
         "//tensorflow/lite/tools:command_line_flags",
-        "//tensorflow/lite/tools/evaluation:evaluation_delegate_provider",
         "//tensorflow/lite/tools/evaluation:evaluation_stage",
         "//tensorflow/lite/tools/evaluation:utils",
         "//tensorflow/lite/tools/evaluation/proto:evaluation_config_cc_proto",

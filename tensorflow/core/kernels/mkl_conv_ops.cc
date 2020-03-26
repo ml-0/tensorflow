@@ -991,8 +991,8 @@ class MklConvOp : public OpKernel {
   mutex mu_;
   Padding padding_;
   TensorFormat data_format_;
-  PersistentTensor cached_filter_data_ptensor_ TF_GUARDED_BY(mu_);
-  PersistentTensor cached_filter_md_ptensor_ TF_GUARDED_BY(mu_);
+  PersistentTensor cached_filter_data_ptensor_ GUARDED_BY(mu_);
+  PersistentTensor cached_filter_md_ptensor_ GUARDED_BY(mu_);
 
   // Initialize to values the template is instantiated with
   bool fuse_biasadd_ = bias_enabled;
@@ -1154,11 +1154,10 @@ class MklConvOp : public OpKernel {
 #endif  // ENABLE_MKLDNN_V1
   }
 
-  // TF_LOCKS_EXCLUDED annotation ensures that the lock (mu_) cannot
+  // LOCKS_EXCLUDED annotation ensures that the lock (mu_) cannot
   // be acquired before entering the function, since it is acquired
   // inside the function.
-  inline bool IsFilterCacheEmpty(OpKernelContext* context)
-      TF_LOCKS_EXCLUDED(mu_) {
+  inline bool IsFilterCacheEmpty(OpKernelContext* context) LOCKS_EXCLUDED(mu_) {
     tf_shared_lock lock(mu_);
     const Tensor& cached_filter_data_tensor =
         *cached_filter_data_ptensor_.AccessTensor(context);
@@ -1172,7 +1171,7 @@ class MklConvOp : public OpKernel {
                    const std::shared_ptr<ConvFwdPd>& conv_fwd_pd,
                    Tfilter* filter_data, const Tensor& filter_tensor,
                    MklDnnData<Tfilter>& filter, const memory::desc& filter_md,
-                   const MklDnnShape& filter_mkl_shape) TF_LOCKS_EXCLUDED(mu_) {
+                   const MklDnnShape& filter_mkl_shape) LOCKS_EXCLUDED(mu_) {
     mutex_lock lock(mu_);
     const Tensor& cached_filter_data_tensor =
         *cached_filter_data_ptensor_.AccessTensor(context);
@@ -1218,7 +1217,7 @@ class MklConvOp : public OpKernel {
                    const std::shared_ptr<ConvFwdPd>& conv_fwd_pd,
                    Tfilter* filter_data, const Tensor& filter_tensor,
                    MklDnnData<Tfilter>& filter, const memory::desc& filter_md)
-      TF_LOCKS_EXCLUDED(mu_) {
+      LOCKS_EXCLUDED(mu_) {
     mutex_lock lock(mu_);
     const Tensor& cached_filter_data_tensor =
         *cached_filter_data_ptensor_.AccessTensor(context);
@@ -1243,8 +1242,7 @@ class MklConvOp : public OpKernel {
 #endif  // ENABLE_MKLDNN_V1
 
   Tfilter* GetCachedFilter(OpKernelContext* context,
-                           const MEMORY_DESC& filter_md)
-      TF_LOCKS_EXCLUDED(mu_) {
+                           const MEMORY_DESC& filter_md) LOCKS_EXCLUDED(mu_) {
     tf_shared_lock lock(mu_);
     const Tensor& cached_filter_data =
         *cached_filter_data_ptensor_.AccessTensor(context);
@@ -1613,7 +1611,7 @@ class MklQuantizedConv2DOp
   }
 
   bool is_bias_const_;
-  PersistentTensor cached_bias_data_ptensor_ TF_GUARDED_BY(bias_cache_mu_);
+  PersistentTensor cached_bias_data_ptensor_ GUARDED_BY(bias_cache_mu_);
 
   memory* input_bias_ = nullptr;
   memory* scaled_bias_ = nullptr;
@@ -1638,11 +1636,11 @@ class MklQuantizedConv2DOp
                                 &cached_bias_data_ptensor_, bias_tensor));
   }
 
-  // TF_LOCKS_EXCLUDED annotation ensures that the lock (mu_) cannot
+  // LOCKS_EXCLUDED annotation ensures that the lock (mu_) cannot
   // be acquired before entering the function, since it is acquired
   // inside the function.
   inline bool IsBiasCacheEmpty(OpKernelContext* context)
-      TF_LOCKS_EXCLUDED(bias_cache_mu_) {
+      LOCKS_EXCLUDED(bias_cache_mu_) {
     tf_shared_lock lock(bias_cache_mu_);
     return (cached_bias_data_ptensor_.NumElements() == 0);
   }
@@ -1652,7 +1650,7 @@ class MklQuantizedConv2DOp
   void CacheBias(OpKernelContext* context,
                  const std::shared_ptr<ConvFwdPd>& conv_fwd_pd,
                  Tbias* bias_data, const memory* scaled_bias)
-      TF_LOCKS_EXCLUDED(bias_cache_mu_) {
+      LOCKS_EXCLUDED(bias_cache_mu_) {
     mutex_lock lock(bias_cache_mu_);
 
     // If bias is already cached, there's nothing to do.
@@ -1670,7 +1668,7 @@ class MklQuantizedConv2DOp
   }
 
   Tbias* GetCachedBias(OpKernelContext* context)
-      TF_LOCKS_EXCLUDED(bias_cache_mu_) {
+      LOCKS_EXCLUDED(bias_cache_mu_) {
     tf_shared_lock lock(bias_cache_mu_);
     const Tensor& cached_bias_data =
         *cached_bias_data_ptensor_.AccessTensor(context);

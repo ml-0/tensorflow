@@ -459,6 +459,7 @@ class MirroredVariableCreationTest(test.TestCase):
             aggregation="invalid")
 
   def testNonMatchingVariableCreation(self, distribution):
+    self.skipTest("b/123075960")
 
     def model_fn(name):
       v = variable_scope.variable(1.0, name=name)
@@ -466,7 +467,7 @@ class MirroredVariableCreationTest(test.TestCase):
       return v
 
     with distribution.scope():
-      names = values.PerReplica(("foo", "bar"))
+      names = values.DistributedValues(("foo", "bar"))
       with self.assertRaises(RuntimeError):
         _ = distribution.extended.call_for_each_replica(model_fn, args=(names,))
 

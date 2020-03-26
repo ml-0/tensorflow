@@ -20,13 +20,7 @@ load("//tensorflow:tensorflow.bzl", "py_test")
 load("//tensorflow:tensorflow.bzl", "cuda_py_test")
 
 package(
-    default_visibility = [
-        # TODO(scottzhu): Remove these two deps and convert the test to integration test.
-        "//tensorflow/python:__pkg__",  # For loss_scale_optimizer_test
-        "//tensorflow/python/distribute:__pkg__",  # For collective_all_reduce_strategy_test
-        "//tensorflow/python/keras:__subpackages__",
-        "//tensorflow/tools/pip_package:__pkg__",
-    ],
+    default_visibility = ["//visibility:public"],
     licenses = ["notice"],  # Apache 2.0
 )
 
@@ -69,7 +63,6 @@ py_test(
         "//tensorflow/python:client_testlib",
         "//tensorflow/python:platform_test",
         "//tensorflow/python/keras",
-        "//tensorflow/python/keras:combinations",
         "//tensorflow/python/keras/mixed_precision/experimental:loss_scale_optimizer",
         "//tensorflow/python/keras/optimizer_v2",
     ],
@@ -93,7 +86,6 @@ cuda_py_test(
     deps = [
         ":device_compatibility_check",
         "//tensorflow/python:client_testlib",
-        "//tensorflow/python/keras:combinations",
     ],
 )
 
@@ -145,7 +137,6 @@ py_test(
         "//tensorflow/python:platform_test",
         "//tensorflow/python/distribute:mirrored_strategy",
         "//tensorflow/python/eager:context",
-        "//tensorflow/python/keras:combinations",
         "//tensorflow/python/keras/optimizer_v2",
         "@absl_py//absl/testing:parameterized",
     ],
@@ -168,10 +159,6 @@ py_library(
     deps = [
         ":loss_scale",
         "//tensorflow/python:loss_scale",
-        "//tensorflow/python/distribute:collective_all_reduce_strategy",
-        "//tensorflow/python/distribute:distribute_lib",
-        "//tensorflow/python/distribute:mirrored_strategy",
-        "//tensorflow/python/distribute:one_device_strategy",
         "//tensorflow/python/keras/optimizer_v2",
         "@absl_py//absl/testing:parameterized",
     ],
@@ -187,9 +174,9 @@ cuda_py_test(
         ":test_util",
         "//tensorflow/python:client_testlib",
         "//tensorflow/python:control_flow_v2_toggles",
-        "//tensorflow/python/distribute:central_storage_strategy",
+        "//tensorflow/python/distribute:mirrored_strategy",
+        "//tensorflow/python/distribute:one_device_strategy",
         "//tensorflow/python/keras",
-        "//tensorflow/python/keras:combinations",
     ],
 )
 
@@ -232,7 +219,6 @@ cuda_py_test(
         "//tensorflow/python/distribute:central_storage_strategy",
         "//tensorflow/python/distribute:mirrored_strategy",
         "//tensorflow/python/keras",
-        "//tensorflow/python/keras:combinations",
         "@absl_py//absl/testing:parameterized",
     ],
 )

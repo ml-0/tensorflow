@@ -17,6 +17,7 @@ limitations under the License.
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include "absl/types/optional.h"
+#include "tensorflow/core/common_runtime/step_stats_collector.h"
 #include "tensorflow/core/framework/step_stats.pb.h"
 #include "tensorflow/core/lib/core/status_test_util.h"
 #include "tensorflow/core/platform/env.h"
@@ -36,7 +37,7 @@ namespace {
 
 using ::testing::UnorderedElementsAre;
 
-NodeExecStats MakeNodeStats(const string& name, uint32 thread_id,
+NodeExecStats MakeNodeStats(const string& name, int32 thread_id,
                             const string& label = "") {
   NodeExecStats ns;
   ns.set_node_name(name);
@@ -74,7 +75,7 @@ inline ::testing::PolymorphicMatcher<NodeStatsMatcher> EqualsNodeStats(
 }
 
 TEST(HostTracerTest, CollectsTraceMeEventsAsRunMetadata) {
-  uint32 thread_id = Env::Default()->GetCurrentThreadId();
+  int32 thread_id = Env::Default()->GetCurrentThreadId();
 
   auto tracer = CreateHostTracer(ProfilerOptions());
 
@@ -106,7 +107,7 @@ TEST(HostTracerTest, CollectsTraceMeEventsAsRunMetadata) {
 }
 
 TEST(HostTracerTest, CollectsTraceMeEventsAsXSpace) {
-  uint32 thread_id;
+  int32 thread_id;
   string thread_name = "MyThreadName";
   XSpace space;
 

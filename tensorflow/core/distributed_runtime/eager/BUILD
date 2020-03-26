@@ -43,7 +43,6 @@ cc_library(
         "//tensorflow/core/common_runtime/eager:tensor_handle",
         "//tensorflow/core/distributed_runtime:worker_session",
         "@com_google_absl//absl/types:span",
-        "@com_google_absl//absl/types:variant",
     ],
 )
 
@@ -113,7 +112,6 @@ cc_library(
         "//tensorflow/core/common_runtime/eager:execute",
         "//tensorflow/core/common_runtime/eager:process_function_library_runtime",
         "//tensorflow/core/common_runtime/eager:tensor_handle",
-        "//tensorflow/core/distributed_runtime:message_wrappers",
         "//tensorflow/core/distributed_runtime:server_lib",
         "//tensorflow/core/distributed_runtime:session_mgr",
         "//tensorflow/core/distributed_runtime:worker_cache",
@@ -151,7 +149,6 @@ tf_cc_test(
         "//tensorflow/core/distributed_runtime:worker_env",
         "//tensorflow/core/distributed_runtime/rpc:rpc_rendezvous_mgr",
         "@com_google_absl//absl/types:optional",
-        "@com_google_absl//absl/types:variant",
     ],
 )
 
@@ -193,10 +190,8 @@ cc_library(
     deps = [
         ":destroy_tensor_handle_node",
         ":eager_client",
-        "//tensorflow/core:framework",
         "//tensorflow/core:lib",
-        "//tensorflow/core/common_runtime/eager:context",
-        "//tensorflow/core/profiler/lib:traceme",
+        "//tensorflow/core/common_runtime/eager:tensor_handle_data",
     ],
 )
 

@@ -97,7 +97,8 @@ class KerasMetricsTest(test.TestCase, parameterized.TestCase):
 
       iterator = distribution.make_input_fn_iterator(lambda _: dataset_fn())
       updates = distribution.experimental_local_results(
-          distribution.run(metric, args=(iterator.get_next(),)))
+          distribution.experimental_run_v2(
+              metric, args=(iterator.get_next(),)))
       batches_per_update = distribution.num_replicas_in_sync
 
       self.evaluate(iterator.initializer)

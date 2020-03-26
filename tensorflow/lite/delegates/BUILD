@@ -26,8 +26,6 @@ cc_library(
     hdrs = ["utils.h"],
     copts = tflite_copts(),
     deps = [
-        "//tensorflow/lite:kernel_api",
-        "//tensorflow/lite:util",
         "//tensorflow/lite/c:common",
     ],
 )

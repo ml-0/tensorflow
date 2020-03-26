@@ -2,14 +2,12 @@
 
 load("//third_party:repo.bzl", "third_party_http_archive")
 
-# Note: Use libhexagon_nn_skel version 1.14 Only with the current version.
-# This comment will be updated with compatible version.
 def repo():
     third_party_http_archive(
         name = "hexagon_nn",
-        sha256 = "5a0e72b20a47d826c3f0437a2fbc099bb214413244ab42979c9832fefe15ff63",
+        sha256 = "281d46b47f7191f03a8a4071c4c8d2af9409bb9d59573dc2e42f04c4fd61f1fd",
         urls = [
-            "https://storage.googleapis.com/mirror.tensorflow.org/storage.cloud.google.com/download.tensorflow.org/tflite/hexagon_nn_headers_v1.14.0.0.tgz",
+            "https://storage.googleapis.com/mirror.tensorflow.org/storage.cloud.google.com/download.tensorflow.org/tflite/hexagon_nn_headers_v1.10.3.1.3.tgz",
         ],
         build_file = "//third_party/hexagon:BUILD",
     )

@@ -166,7 +166,6 @@ cc_library(
         "//tensorflow/core/platform:scanner",
         "//tensorflow/core/platform:str_util",
         "//tensorflow/core/platform:stringpiece",
-        "//tensorflow/core/util:env_var",
         "@curl",
     ],
 )

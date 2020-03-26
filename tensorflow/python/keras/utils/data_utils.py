@@ -678,7 +678,7 @@ class SequenceEnqueuer(object):
       for data in datas:
           # Use the inputs; training, evaluating, predicting.
           # ... stop sometime.
-      enqueuer.stop()
+      enqueuer.close()
   ```
 
   The `enqueuer.get()` should be an infinite stream of datas.

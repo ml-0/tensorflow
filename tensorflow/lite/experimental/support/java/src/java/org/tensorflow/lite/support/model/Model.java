@@ -86,25 +86,16 @@ public class Model {
     }
   }
 
-  /** Returns the memory-mapped model data. */
+  /** Return the memory-mapped model data. */
   @NonNull
   public MappedByteBuffer getData() {
     return byteModel;
   }
 
-  /** Returns the path of the model file stored in Assets. */
+  /** Return the path of the model file stored in Assets. */
   @NonNull
   public String getPath() {
     return modelPath;
-  }
-
-  /**
-   * Returns the output shape. Useful if output shape is only determined when graph is created.
-   *
-   * @throws IllegalStateException if the interpreter is closed.
-   */
-  public int[] getOutputTensorShape(int outputIndex) {
-    return interpreter.getOutputTensor(outputIndex).shape();
   }
 
   /**

@@ -1,5 +1,5 @@
 load("//tensorflow:tensorflow.bzl", "if_not_windows", "tf_cc_test")
-load("//tensorflow/lite:build_def.bzl", "if_tflite_experimental_runtime", "tflite_cc_shared_object", "tflite_copts", "tflite_experimental_runtime_linkopts")
+load("//tensorflow/lite:build_def.bzl", "tflite_cc_shared_object", "tflite_copts")
 load("//tensorflow/lite/micro:build_def.bzl", "cc_library")
 load("//tensorflow/lite:special_rules.bzl", "tflite_portable_test_suite")
 
@@ -61,24 +61,6 @@ TFLITE_DEFAULT_COPTS = if_not_windows([
     "-Wno-comment",
     "-Wno-extern-c-compat",
 ])
-
-FRAMEWORK_LIB_HDRS = [
-    "allocation.h",
-    "context.h",
-    "context_util.h",
-    "core/macros.h",
-    "core/subgraph.h",
-    "error_reporter.h",
-    "graph_info.h",
-    "interpreter.h",
-    "model.h",
-    "model_builder.h",
-    "interpreter_builder.h",
-    "mutable_op_resolver.h",
-    "op_resolver.h",
-    "optional_debug_tools.h",
-    "stderr_reporter.h",
-]
 
 cc_library(
     name = "version",
@@ -218,23 +200,34 @@ cc_library(
     ],
 )
 
+# TODO(ahentz): investigate dependency on gemm_support requiring usage of tf_copts.
 cc_library(
-    name = "framework_lib",
+    name = "framework",
     srcs = [
         "core/subgraph.cc",
         "graph_info.cc",
         "interpreter.cc",
-        "interpreter_builder.cc",
-        "model_builder.cc",
+        "model.cc",
         "mutable_op_resolver.cc",
         "optional_debug_tools.cc",
         "stderr_reporter.cc",
     ],
-    hdrs = FRAMEWORK_LIB_HDRS,
-    copts = tflite_copts() + TFLITE_DEFAULT_COPTS,
-    visibility = [
-        "//tensorflow/lite:__subpackages__",
+    hdrs = [
+        "allocation.h",
+        "context.h",
+        "context_util.h",
+        "core/macros.h",
+        "core/subgraph.h",
+        "error_reporter.h",
+        "graph_info.h",
+        "interpreter.h",
+        "model.h",
+        "mutable_op_resolver.h",
+        "op_resolver.h",
+        "optional_debug_tools.h",
+        "stderr_reporter.h",
     ],
+    copts = tflite_copts() + TFLITE_DEFAULT_COPTS,
     deps = [
         ":allocation",
         ":arena_planner",
@@ -262,40 +255,6 @@ cc_library(
     alwayslink = 1,
 )
 
-# TODO(ahentz): investigate dependency on gemm_support requiring usage of tf_copts.
-cc_library(
-    name = "framework",
-    srcs = [
-    ],
-    hdrs = FRAMEWORK_LIB_HDRS,
-    copts = tflite_copts() + TFLITE_DEFAULT_COPTS,
-    defines = if_tflite_experimental_runtime(
-        if_eager = ["TFLITE_EXPERIMENTAL_RUNTIME_EAGER"],
-        if_non_eager = ["TFLITE_EXPERIMENTAL_RUNTIME_NON_EAGER"],
-        if_none = [],
-    ),
-    deps = [
-        ":framework_lib",
-        ":allocation",
-        ":arena_planner",
-        ":external_cpu_backend_context",
-        ":graph_info",
-        ":memory_planner",
-        ":minimal_logging",
-        ":simple_memory_arena",
-        ":string",
-        ":type_to_tflitetype",
-        ":util",
-        ":version",
-        "//tensorflow/lite/c:common",
-        "//tensorflow/lite/core/api",
-        "//tensorflow/lite/delegates/nnapi:nnapi_delegate",
-        "//tensorflow/lite/experimental/resource",
-        "//tensorflow/lite/nnapi:nnapi_implementation",
-        "//tensorflow/lite/schema:schema_fbs",
-    ] + tflite_experimental_runtime_linkopts(),
-)
-
 cc_library(
     name = "string_util",
     srcs = ["string_util.cc"],
@@ -306,18 +265,6 @@ cc_library(
         ":string",
         "//tensorflow/lite/c:common",
     ],
-)
-
-cc_library(
-    name = "tflite_with_xnnpack",
-    srcs = ["tflite_with_xnnpack.cc"],
-    copts = tflite_copts() + TFLITE_DEFAULT_COPTS,
-    linkstatic = True,
-    deps = [
-        "//tensorflow/lite/c:common",
-        "//tensorflow/lite/delegates/xnnpack:xnnpack_delegate",
-    ],
-    alwayslink = 1,
 )
 
 cc_test(
@@ -447,32 +394,6 @@ tf_cc_test(
     ],
 )
 
-# Test model framework with the XNNPACK delegate.
-cc_test(
-    name = "model_xnnpack_test",
-    size = "small",
-    srcs = [
-        "model_xnnpack_test.cc",
-    ],
-    data = [
-        "testdata/multi_add.bin",
-    ],
-    tags = [
-        "no_windows",  # No weak symbols with MSVC.
-        "tflite_not_portable_android",
-        "tflite_not_portable_ios",
-    ],
-    deps = [
-        ":framework",
-        ":tflite_with_xnnpack",
-        ":util",
-        "//tensorflow/lite/c:common",
-        "//tensorflow/lite/kernels:builtin_ops",
-        "//tensorflow/lite/testing:util",
-        "@com_google_googletest//:gtest",
-    ],
-)
-
 # Test OpResolver.
 cc_test(
     name = "mutable_op_resolver_test",
@@ -495,7 +416,6 @@ cc_library(
     hdrs = ["util.h"],
     copts = TFLITE_DEFAULT_COPTS + tflite_copts(),
     deps = [
-        ":kernel_api",
         "//tensorflow/lite/c:common",
         "//tensorflow/lite/schema:schema_fbs",
     ],
@@ -512,7 +432,6 @@ cc_test(
     deps = [
         ":util",
         "//tensorflow/lite/c:common",
-        "//tensorflow/lite/schema:schema_fbs",
         "@com_google_googletest//:gtest",
     ],
 )
@@ -586,7 +505,7 @@ tflite_cc_shared_object(
         ":framework",
         ":tflite_exported_symbols.lds",
         ":tflite_version_script.lds",
-        "//tensorflow/lite/kernels:builtin_ops_all_linked",
+        "//tensorflow/lite/kernels:builtin_ops",
     ],
 )
 

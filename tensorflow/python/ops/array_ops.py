@@ -1282,7 +1282,7 @@ def parallel_stack(values, name="parallel_stack"):
 @dispatch.add_dispatch_support
 def stack(values, axis=0, name="stack"):
   """Stacks a list of rank-`R` tensors into one rank-`(R+1)` tensor.
-
+  
   See also `tf.concat`, `tf.tile`, `tf.repeat`.
 
   Packs the list of tensors in `values` into a tensor with rank one higher than
@@ -1515,7 +1515,7 @@ def unstack(value, num=None, axis=0, name="unstack"):
 @dispatch.add_dispatch_support
 def concat(values, axis, name="concat"):
   """Concatenates tensors along one dimension.
-
+  
   See also `tf.tile`, `tf.stack`, `tf.repeat`.
 
   Concatenates the list of tensors `values` along dimension `axis`.  If
@@ -1538,14 +1538,14 @@ def concat(values, axis, name="concat"):
 
   >>> t1 = [[1, 2, 3], [4, 5, 6]]
   >>> t2 = [[7, 8, 9], [10, 11, 12]]
-  >>> tf.concat([t1, t2], 0)
+  >>> concat([t1, t2], 0)
   <tf.Tensor: shape=(4, 3), dtype=int32, numpy=
   array([[ 1,  2,  3],
          [ 4,  5,  6],
          [ 7,  8,  9],
          [10, 11, 12]], dtype=int32)>
 
-  >>> tf.concat([t1, t2], 1)
+  >>> concat([t1, t2], 1)
   <tf.Tensor: shape=(2, 6), dtype=int32, numpy=
   array([[ 1,  2,  3,  7,  8,  9],
          [ 4,  5,  6, 10, 11, 12]], dtype=int32)>
@@ -1888,7 +1888,7 @@ unique_with_counts.__doc__ = gen_array_ops.unique_with_counts.__doc__
 @tf_export("split")
 def split(value, num_or_size_splits, axis=0, num=None, name="split"):
   """Splits a tensor `value` into a list of sub tensors.
-
+  
   See also `tf.unstack`.
 
   If `num_or_size_splits` is an integer, then `value` is split along the
@@ -2739,7 +2739,7 @@ def zeros(shape, dtype=dtypes.float32, name=None):
 @dispatch.add_dispatch_support
 def zeros_like(tensor, dtype=None, name=None, optimize=True):
   """Creates a tensor with all elements set to zero.
-
+  
   See also `tf.zeros`.
 
   Given a single tensor (`tensor`), this operation returns a tensor of the
@@ -2781,7 +2781,7 @@ def zeros_like_v2(
     dtype=None,
     name=None):
   """Creates a tensor with all elements set to zero.
-
+  
   See also `tf.zeros`.
 
   Given a single tensor or array-like object (`input`), this operation returns
@@ -2854,7 +2854,7 @@ def zeros_like_impl(tensor, dtype, name, optimize=True):
 @dispatch.add_dispatch_support
 def ones_like(tensor, dtype=None, name=None, optimize=True):
   """Creates a tensor with all elements set to 1.
-
+  
   See also `tf.ones`.
 
   Given a single tensor (`tensor`), this operation returns a tensor of the same
@@ -2890,7 +2890,7 @@ def ones_like_v2(
     dtype=None,
     name=None):
   """Creates a tensor of all ones that has the same shape as the input.
-
+  
   See also `tf.ones`.
 
   Given a single tensor (`tensor`), this operation returns a tensor of the
@@ -2934,7 +2934,7 @@ def ones_like_impl(tensor, dtype, name, optimize=True):
 @tf_export("ones")
 def ones(shape, dtype=dtypes.float32, name=None):
   """Creates a tensor with all elements set to one (1).
-
+  
   See also `tf.ones_like`.
 
   This operation returns a tensor of type `dtype` with shape `shape` and
@@ -4391,14 +4391,14 @@ def reverse_sequence(input,
          [5, 4, 3, 2, 1, 6, 7, 8]], dtype=int32)>
 
   Args:
-    input: A `Tensor`. The input to reverse.
-    seq_lengths: A `Tensor`. Must be one of the following types: `int32`,
+    `input`: A `Tensor`. The input to reverse.
+    `seq_lengths`: A `Tensor`. Must be one of the following types: `int32`,
       `int64`. 1-D with length `input.dims(batch_dim)` and `max(seq_lengths) <=
       input.dims(seq_dim)`
-    seq_axis: An `int`. The dimension which is partially reversed.
-    batch_axis: An optional `int`. Defaults to `0`. The dimension along which
+    `seq_axis`: An `int`. The dimension which is partially reversed.
+    `batch_axis`: An optional `int`. Defaults to `0`. The dimension along which
       reversal is performed.
-    name: A name for the operation (optional).
+    `name`: A name for the operation (optional).
 
   Returns:
     A Tensor. Has the same type as input.
@@ -5511,24 +5511,17 @@ def repeat_with_axis(data, repeats, axis, name=None):
     # If `axis` is negative, then convert it to a positive value.
     axis = get_positive_axis(axis, data.shape.rank, ndims_name="rank(data)")
 
-    # If we know that `repeats` is a scalar, then we can just tile & reshape.
-    if repeats.shape.num_elements() == 1:
-      repeats = reshape(repeats, [])
-      expanded = expand_dims(data, axis + 1)
-      tiled = tile_one_dimension(expanded, axis + 1, repeats)
-      result_shape = concat([
-          data_shape[:axis], [repeats * data_shape[axis]], data_shape[axis + 1:]
-      ],
-                            axis=0)
-      return reshape(tiled, result_shape)
-
-
     # Check data Tensor shapes.
     if repeats.shape.ndims == 1:
       data.shape.dims[axis].assert_is_compatible_with(repeats.shape[0])
 
-    repeats = broadcast_to(repeats, [data_shape[axis]])
-    repeats_original = repeats
+    # If we know that `repeats` is a scalar, then we can just tile & reshape.
+    if repeats.shape.ndims == 0:
+      expanded = expand_dims(data, axis + 1)
+      tiled = tile_one_dimension(expanded, axis + 1, repeats)
+      result_shape = concat([data_shape[:axis], [-1], data_shape[axis + 1:]],
+                            axis=0)
+      return reshape(tiled, result_shape)
 
     # Broadcast the `repeats` tensor so rank(repeats) == axis + 1.
     if repeats.shape.ndims != axis + 1:
@@ -5559,12 +5552,8 @@ def repeat_with_axis(data, repeats, axis, name=None):
     if axis == 0:
       result = masked
     else:
-      repeated_dim_size = gen_math_ops._sum(
-          repeats_original,
-          axis=gen_math_ops._range(0, rank(repeats_original), 1))
-      result_shape = concat(
-          [data_shape[:axis], [repeated_dim_size], data_shape[axis + 1:]],
-          axis=0)
+      result_shape = concat([data_shape[:axis], [-1], data_shape[axis + 1:]],
+                            axis=0)
       result = reshape(masked, result_shape)
 
     # Preserve shape information.

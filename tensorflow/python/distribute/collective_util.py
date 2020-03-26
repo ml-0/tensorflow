@@ -41,8 +41,7 @@ class Hints(object):
       bytes_per_pack=50 * 1024 * 1024)
   grads = tf.distribute.get_replica_context().all_reduce(
       'sum', grads, experimental_hints=hints)
-  optimizer.apply_gradients(zip(grads, vars),
-      experimental_aggregate_gradients=False)
+  optimizer.apply_gradients(zip(grads, vars), all_reduce_sum_gradients=False)
   ```
 
   """

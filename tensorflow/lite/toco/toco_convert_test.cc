@@ -39,7 +39,7 @@ TEST(TocoTest, BadInputFormat) {
                "Unhandled input_format='FILE_FORMAT_UNKNOWN'");
 }
 
-TEST(TocoTest, MissingOutputArrays) {
+TEST(TocoTest, MissingOuputArrays) {
   TocoFlags toco_flags;
   ModelFlags model_flags;
 

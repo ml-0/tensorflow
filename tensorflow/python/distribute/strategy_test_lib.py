@@ -34,6 +34,7 @@ from tensorflow.python.eager import backprop
 from tensorflow.python.eager import context
 from tensorflow.python.eager import def_function
 from tensorflow.python.eager import test
+from tensorflow.python.framework import constant_op
 from tensorflow.python.framework import dtypes
 from tensorflow.python.framework import errors
 from tensorflow.python.framework import ops
@@ -119,7 +120,7 @@ class DistributionTestBase(test.TestCase):
       l = core.Dense(1, use_bias=False)
 
       def loss(x):
-        y = array_ops.reshape(l(x), []) - array_ops.identity(1.)
+        y = array_ops.reshape(l(x), []) - constant_op.constant(1.)
         return y * y
       # TODO(isaprykin): Extract implicit_grad+get_filtered_grad_fn into a
       # common `implicit_grad` function and put it in DistributionStrategy.
@@ -129,7 +130,7 @@ class DistributionTestBase(test.TestCase):
       def update(v, g):
         return v.assign_sub(0.2 * g)
 
-      one = array_ops.identity([[1.]])
+      one = constant_op.constant([[1.]])
 
       def step():
         """Perform one optimization step."""
@@ -176,7 +177,7 @@ class DistributionTestBase(test.TestCase):
       l = core.Dense(1, use_bias=False)
 
       def loss(x):
-        y = array_ops.reshape(l(x), []) - array_ops.identity(1.)
+        y = array_ops.reshape(l(x), []) - constant_op.constant(1.)
         return y * y
 
       grad_fn = backprop.implicit_grad(loss)
@@ -184,7 +185,7 @@ class DistributionTestBase(test.TestCase):
       def update(v, g):
         return v.assign_sub(learning_rate * g)
 
-      one = array_ops.identity([[1.]])
+      one = constant_op.constant([[1.]])
 
       def step():
         """Perform one optimization step."""
@@ -452,15 +453,16 @@ class OneDeviceDistributionTestBase(test.TestCase):
   """Some tests that should work with any one-device DistributionStrategy."""
 
   def _test_run(self, strategy):
-    out1 = strategy.run(lambda: array_ops.identity(4.))
+    out1 = strategy.experimental_run_v2(lambda: constant_op.constant(4.))
     self.assertAllEqual([4.], self.evaluate(strategy.unwrap(out1)))
 
-    out2 = strategy.run(lambda x: {"a": x * 2, "b": x * x}, args=(out1,))
+    out2 = strategy.experimental_run_v2(
+        lambda x: {"a": x * 2, "b": x * x}, args=(out1,))
     out2_vals = self.evaluate(nest.map_structure(strategy.unwrap, out2))
     self.assertAllEqual([8.], out2_vals["a"])
     self.assertAllEqual([16.], out2_vals["b"])
 
-    out3 = strategy.run(lambda b, a: a + 2 * b + 2, kwargs=out2)
+    out3 = strategy.experimental_run_v2(lambda b, a: a + 2 * b + 2, kwargs=out2)
     self.assertAllEqual([42.], self.evaluate(strategy.unwrap(out3)))
 
   def _test_all_reduce_sum(self, strategy):
@@ -505,7 +507,7 @@ class OneDeviceDistributionTestBase(test.TestCase):
       self.skipTest("`tf.gradients` is not supported with eager execution.")
 
     def step(c):
-      x = array_ops.identity(42.)
+      x = constant_op.constant(42.)
       y = comm_fn(x) * c
       return gradients_impl.gradients(y, [x])[0]
 
@@ -523,7 +525,7 @@ class OneDeviceDistributionTestBase(test.TestCase):
                                            expected_grads):
 
     def step(c):
-      x = array_ops.identity(42.)
+      x = constant_op.constant(42.)
       with backprop.GradientTape() as tape:
         tape.watch(x)
         y = comm_fn(x) * c
@@ -573,16 +575,17 @@ class TwoDeviceDistributionTestBase(test.TestCase):
   """Some tests that should work with any two-device DistributionStrategy."""
 
   def _test_run(self, strategy):
-    out1 = strategy.run(
+    out1 = strategy.experimental_run_v2(
         lambda: ds_context.get_replica_context().replica_id_in_sync_group + 1)
     self.assertAllEqual([1, 2], self.evaluate(strategy.unwrap(out1)))
 
-    out2 = strategy.run(lambda x: {"a": x * 2, "b": x * x}, args=(out1,))
+    out2 = strategy.experimental_run_v2(
+        lambda x: {"a": x * 2, "b": x * x}, args=(out1,))
     out2_vals = self.evaluate(nest.map_structure(strategy.unwrap, out2))
     self.assertAllEqual([2, 4], out2_vals["a"])
     self.assertAllEqual([1, 4], out2_vals["b"])
 
-    out3 = strategy.run(lambda b, a: a + 2 * b + 2, kwargs=out2)
+    out3 = strategy.experimental_run_v2(lambda b, a: a + 2 * b + 2, kwargs=out2)
     self.assertAllEqual([6, 14], self.evaluate(strategy.unwrap(out3)))
 
   def _test_all_reduce_sum(self, strategy):
@@ -633,7 +636,7 @@ class TwoDeviceDistributionTestBase(test.TestCase):
       self.skipTest("`tf.gradients` is not supported with eager execution.")
 
     def step(c):
-      x = array_ops.identity(42.)
+      x = constant_op.constant(42.)
       y = comm_fn(x) * c
       return gradients_impl.gradients(y, [x])[0]
 
@@ -651,7 +654,7 @@ class TwoDeviceDistributionTestBase(test.TestCase):
                                            expected_grads):
 
     def step(c):
-      x = array_ops.identity(42.)
+      x = constant_op.constant(42.)
       with backprop.GradientTape() as tape:
         tape.watch(x)
         y = comm_fn(x) * c

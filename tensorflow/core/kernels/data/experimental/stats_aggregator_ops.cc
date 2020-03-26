@@ -105,9 +105,8 @@ class StatsAggregatorImpl : public StatsAggregator {
 
  private:
   mutex mu_;
-  std::unordered_map<string, histogram::Histogram> histograms_
-      TF_GUARDED_BY(mu_);
-  std::unordered_map<string, float> scalars_ TF_GUARDED_BY(mu_);
+  std::unordered_map<string, histogram::Histogram> histograms_ GUARDED_BY(mu_);
+  std::unordered_map<string, float> scalars_ GUARDED_BY(mu_);
   TF_DISALLOW_COPY_AND_ASSIGN(StatsAggregatorImpl);
 };
 
@@ -119,7 +118,7 @@ class StatsAggregatorHandleOp
 
  private:
   Status CreateResource(StatsAggregatorResource** ret) override
-      TF_EXCLUSIVE_LOCKS_REQUIRED(mu_) {
+      EXCLUSIVE_LOCKS_REQUIRED(mu_) {
     *ret =
         new StatsAggregatorResource(absl::make_unique<StatsAggregatorImpl>());
     return Status::OK();
@@ -196,7 +195,7 @@ class StatsAggregatorImplV2 : public StatsAggregator {
 
  private:
   void AddToEvents(const string& name, const int64 steps,
-                   const float scalar_value) TF_EXCLUSIVE_LOCKS_REQUIRED(mu_) {
+                   const float scalar_value) EXCLUSIVE_LOCKS_REQUIRED(mu_) {
     if (summary_writer_interface_ == nullptr) {
       return;
     }
@@ -212,7 +211,7 @@ class StatsAggregatorImplV2 : public StatsAggregator {
 
   void AddToEvents(const string& name, const int64 steps,
                    const histogram::Histogram& histogram)
-      TF_EXCLUSIVE_LOCKS_REQUIRED(mu_) {
+      EXCLUSIVE_LOCKS_REQUIRED(mu_) {
     if (summary_writer_interface_ == nullptr) {
       return;
     }
@@ -226,12 +225,10 @@ class StatsAggregatorImplV2 : public StatsAggregator {
   }
 
   mutex mu_;
-  SummaryWriterInterface* summary_writer_interface_ TF_GUARDED_BY(mu_) =
-      nullptr;
+  SummaryWriterInterface* summary_writer_interface_ GUARDED_BY(mu_) = nullptr;
   // not owned, we might be associating the default summary_writer from the
   // context
-  std::unordered_map<string, histogram::Histogram> histograms_
-      TF_GUARDED_BY(mu_);
+  std::unordered_map<string, histogram::Histogram> histograms_ GUARDED_BY(mu_);
   TF_DISALLOW_COPY_AND_ASSIGN(StatsAggregatorImplV2);
 };
 
@@ -243,7 +240,7 @@ class StatsAggregatorHandleOpV2
 
  private:
   Status CreateResource(StatsAggregatorResource** ret) override
-      TF_EXCLUSIVE_LOCKS_REQUIRED(mu_) {
+      EXCLUSIVE_LOCKS_REQUIRED(mu_) {
     *ret =
         new StatsAggregatorResource(absl::make_unique<StatsAggregatorImplV2>());
     return Status::OK();

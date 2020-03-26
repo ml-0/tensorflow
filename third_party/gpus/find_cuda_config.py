@@ -437,7 +437,7 @@ def _get_legacy_path(env_name, default=[]):
 
 def _normalize_path(path):
   """Returns normalized path, with forward slashes on Windows."""
-  path = os.path.realpath(path)
+  path = os.path.normpath(path)
   if _is_windows():
     path = path.replace("\\", "/")
   return path

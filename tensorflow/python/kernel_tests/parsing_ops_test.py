@@ -2278,13 +2278,13 @@ class ParseSequenceExampleTest(test.TestCase):
             serialized=ops.convert_to_tensor(original.SerializeToString()),
             sequence_features=sequence_features),
         expected_err=(
-            (errors_impl.InvalidArgumentError, ValueError),
+            (errors_impl.OpError, ValueError),
             # Message for batch=true:
             "Feature b: values and partitions are not aligned"
             # Message for batch=false in graph mode:
             "|.* do not form a valid RaggedTensor"
             # Message for batch=false in eager mode:
-            "|Incompatible shapes"))
+            "|Dimensions 2 and 1 are not compatible"))
 
 
 @test_util.run_all_in_graph_and_eager_modes

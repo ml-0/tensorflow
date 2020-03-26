@@ -53,9 +53,8 @@ class Normalization(CombinerPreprocessingLayer):
   Attributes:
       axis: Integer or tuple of integers, the axis or axes that should be
         normalized (typically the features axis). We will normalize each element
-        in the specified axis. If set to 'None', the layer will perform
-        scalar normalization (diving the input by a single scalar value).
-        0 (the batch axis) is not allowed.
+        in the specified axis. The default is '-1' (the innermost axis); 0 (the
+        batch axis) is not allowed.
   """
 
   def __init__(self, axis=-1, dtype=None, **kwargs):
@@ -80,11 +79,8 @@ class Normalization(CombinerPreprocessingLayer):
         mean_and_var_shape.append(input_shape[i])
         self._broadcast_shape[i] = input_shape[i]
     else:
-      if self.axis is None:
-        mean_and_var_shape = ()
-      else:
-        mean_and_var_shape = input_shape[self.axis]
-        self._broadcast_shape[self.axis] = input_shape[self.axis]
+      mean_and_var_shape = input_shape[self.axis]
+      self._broadcast_shape[self.axis] = input_shape[self.axis]
 
     # count is not used in this class's call() method, but is used to re-create
     # the accumulator during multiple calls to 'adapt'.
@@ -156,10 +152,7 @@ class _NormalizingCombiner(Combiner):
     """Compute a step in this computation, returning a new accumulator."""
 
     # This is the shape of all reduced axes (not specified in 'axis').
-    if self.axis is None:
-      reduction_counts = values.shape
-    else:
-      reduction_counts = np.delete(values.shape, self.axis)
+    reduction_counts = np.delete(values.shape, self.axis)
     # We get the number of elements that will be reduced by multiplying all
     # values of 'shape' corresponding to the reduced axes.
     count = np.prod(reduction_counts, dtype=np.int32)
@@ -167,10 +160,7 @@ class _NormalizingCombiner(Combiner):
     # We want to reduce across dimensions except those specified in 'axis'
     # when using np.mean or np.variance; create the tuple of axes to reduce
     # over here.
-    if self.axis is None:
-      reduction_axes = None
-    else:
-      reduction_axes = tuple(np.delete(range(values.ndim), self.axis))
+    reduction_axes = tuple(np.delete(range(values.ndim), self.axis))
     mean = np.mean(values, axis=reduction_axes, dtype=np.float64)
     variance = np.var(values, axis=reduction_axes, dtype=np.float64)
 

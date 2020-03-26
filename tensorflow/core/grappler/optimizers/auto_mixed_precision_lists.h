@@ -69,7 +69,6 @@ class AutoMixedPrecisionLists {
         "CudnnRNNBackpropV3",
         "CudnnRNNV2",
         "CudnnRNNV3",
-        "Einsum",
         "GRUBlockCell",
         "GRUBlockCellGrad",
         "LSTMBlockCell",

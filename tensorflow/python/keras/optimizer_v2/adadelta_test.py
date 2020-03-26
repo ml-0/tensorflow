@@ -18,7 +18,6 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from absl.testing import parameterized
 import numpy as np
 
 from tensorflow.python.eager import context
@@ -26,7 +25,6 @@ from tensorflow.python.framework import constant_op
 from tensorflow.python.framework import dtypes
 from tensorflow.python.framework import ops
 from tensorflow.python.framework import test_util
-from tensorflow.python.keras import combinations
 from tensorflow.python.keras.optimizer_v2 import adadelta
 from tensorflow.python.ops import embedding_ops
 from tensorflow.python.ops import math_ops
@@ -40,7 +38,7 @@ if (not test_util.IsBuiltWithNvcc() and not test.is_built_with_rocm()):
   _DATA_TYPES += [dtypes.complex64, dtypes.complex128]
 
 
-class AdadeltaOptimizerTest(test.TestCase, parameterized.TestCase):
+class AdadeltaOptimizerTest(test.TestCase):
 
   def doTestBasic(self, use_resource=False, use_callable_params=False):
     num_updates = 4  # number of ADADELTA steps to perform
@@ -147,7 +145,7 @@ class AdadeltaOptimizerTest(test.TestCase, parameterized.TestCase):
                   self.evaluate(var1),
                   rtol=1e-5)
 
-  @combinations.generate(combinations.combine(mode=["graph", "eager"]))
+  @test_util.run_in_graph_and_eager_modes(reset_test=True)
   def testResourceBasic(self):
     self.doTestBasic(use_resource=True)
 

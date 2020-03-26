@@ -74,14 +74,10 @@ enum HostEventType {
   kWhileOpStartBody,
   kForOp,
   kPartitionedCallOp,
-  // XLA related.
-  kLocalExecutableExecuteOnLocalDevice,
-  kLocalExecutableExecute,
   // tf.data related.
   kIteratorGetNextOp,
   // Virtual events for grouping.
   kHostTrainingLoopIteration,
-  kAsyncExecutorTraceContext,
   // GPU related.
   kKernelLaunch,
   kKernelExecute,
@@ -130,7 +126,6 @@ enum StatType {
   kTfOp,
   kHloOp,
   kHloModule,
-  kEquation,
   // Performance counter related.
   kRawValue,
   kScaledValue,
@@ -168,12 +163,6 @@ inline bool IsStatType(StatType stat_type, absl::string_view stat_name) {
 }
 
 absl::optional<int64> FindStatType(absl::string_view stat_name);
-
-// Returns true if the given stat shouldn't be shown in the trace viewer.
-inline bool IsInternalStat(absl::optional<int64> stat_type) {
-  return stat_type == StatType::kKernelDetails ||
-         stat_type == StatType::kLevel0;
-}
 
 }  // namespace profiler
 }  // namespace tensorflow

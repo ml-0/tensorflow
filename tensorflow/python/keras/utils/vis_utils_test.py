@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ==============================================================================
-"""Tests for Keras Vis utils."""
+"""Tests for Keras Layer utils."""
 
 from __future__ import absolute_import
 from __future__ import division

@@ -199,10 +199,9 @@ class SetStatsAggregatorDatasetOp : public UnaryDatasetOpKernel {
                                          /*ratio=*/1);
       }
 
-      Status SaveInternal(SerializationContext* ctx,
-                          IteratorStateWriter* writer) override {
+      Status SaveInternal(IteratorStateWriter* writer) override {
         mutex_lock l(mu_);
-        return SaveInput(ctx, writer, input_impl_);
+        return SaveInput(writer, input_impl_);
       }
 
       Status RestoreInternal(IteratorContext* ctx,
@@ -213,7 +212,7 @@ class SetStatsAggregatorDatasetOp : public UnaryDatasetOpKernel {
 
      private:
       mutex mu_;
-      std::unique_ptr<IteratorBase> input_impl_ TF_GUARDED_BY(mu_);
+      std::unique_ptr<IteratorBase> input_impl_ GUARDED_BY(mu_);
     };
 
     const DatasetBase* const input_;

@@ -28,8 +28,8 @@ namespace eager {
 #if !defined(IS_MOBILE_PLATFORM)
 void EagerProcessFunctionLibraryRuntime::RunRemoteDevice(
     const FunctionLibraryRuntime::Options& opts,
-    FunctionLibraryRuntime::Handle local_handle,
-    gtl::ArraySlice<FunctionArg> args, std::vector<Tensor>* rets,
+    FunctionLibraryRuntime::Handle local_handle, const InternalArgsView& args,
+    std::vector<Tensor>* rets,
     FunctionLibraryRuntime::DoneCallback done) const {
   if (!rets->empty()) {
     done(
@@ -37,7 +37,19 @@ void EagerProcessFunctionLibraryRuntime::RunRemoteDevice(
                               "EagerClusterFunctionLibraryRuntime yet."));
     return;
   }
-  parent_->Run(opts, local_handle, args, rets, std::move(done));
+  if (!args.local_args.empty()) {
+    done(
+        errors::Unimplemented("Local inputs are not by supported by "
+                              "EagerClusterFunctionLibraryRuntime."));
+    return;
+  }
+  if (args.remote_args == nullptr) {
+    done(
+        errors::Internal("EagerClusterFunctionLibraryRuntime: remote_args "
+                         "should never be null."));
+    return;
+  }
+  parent_->Run(opts, local_handle, args.remote_args, std::move(done));
 }
 
 void EagerProcessFunctionLibraryRuntime::Run(
@@ -50,8 +62,7 @@ void EagerProcessFunctionLibraryRuntime::Run(
                                               std::move(done));
   }
   auto* cleanup_items = new std::vector<std::unique_ptr<CleanUpItem>>;
-  done =
-      ApplyCleanUpToDoneCallback(cleanup_items, done, /*rendezvous=*/nullptr);
+  done = ApplyCleanUpToDoneCallback(cleanup_items, done);
 
   auto get_component_args = [&args](const ComponentFunctionData& comp_data,
                                     InternalArgs* comp_args) -> Status {
@@ -59,13 +70,11 @@ void EagerProcessFunctionLibraryRuntime::Run(
       const int index = comp_data.arg_indices_.at(i);
       Tensor tensor;
       if (args.GetLocalArg(index, &tensor).ok()) {
-        comp_args->args.push_back(std::move(tensor));
+        comp_args->local_args.push_back(std::move(tensor));
       } else {
         RemoteTensorHandle remote_handle;
         TF_RETURN_IF_ERROR(args.GetRemoteArg(index, &remote_handle));
-        comp_args->remote_args.emplace_back(
-            absl::make_unique<RemoteTensorHandle>(std::move(remote_handle)));
-        comp_args->args.push_back(comp_args->remote_args.back().get());
+        comp_args->remote_args.push_back(std::move(remote_handle));
       }
     }
     return Status::OK();

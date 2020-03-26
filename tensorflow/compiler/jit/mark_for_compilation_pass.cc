@@ -161,11 +161,6 @@ class MarkForCompilationPassImpl {
     // The ID of the cluster as represented in `cycles_graph_`.
     int cycles_graph_node_id() const { return cycles_graph_node_id_; }
 
-    // Sets the ID of the cluster as represented in `cycles_graph_`.
-    void set_cycles_graph_node_id(int cycles_graph_node_id) {
-      cycles_graph_node_id_ = cycles_graph_node_id;
-    }
-
     // The size of the cluster excluding constant and identity nodes.
     int effective_cluster_size() const { return effective_cluster_size_; }
 
@@ -386,16 +381,14 @@ class MarkForCompilationPassImpl {
   // R, B} cluster.
   string DescribePotentialCycle(int from, int to);
 
-  // Merge the clusters `cluster_from` and `cluster_to`. After this step the
-  // larger combined cluster is represented by `cluster_from`, but can have
-  // `cycles_graph_`'s ID of either `cluster_from` or `cluster_to` depending on
-  // which way will require less operations.
+  // Merge the clusters `cluster_from` and `cluster_to`.  After this step the
+  // larger combined cluster is represented by `cluster_from`'s ID in
+  // `cycles_graph_`.
   bool MergeClusters(Cluster* cluster_from, Cluster* cluster_to) {
     int from = cluster_from->cycles_graph_node_id();
     int to = cluster_to->cycles_graph_node_id();
 
-    auto optional_merged_node = cycles_graph_.ContractEdge(from, to);
-    if (!optional_merged_node.has_value()) {
+    if (!cycles_graph_.ContractEdge(from, to)) {
       VLOG(3) << "Could not contract " << cluster_from->DebugString(*graph_)
               << " -> " << cluster_to->DebugString(*graph_)
               << " because contracting the edge would create a cycle via "
@@ -405,8 +398,6 @@ class MarkForCompilationPassImpl {
 
     // Merge the clusters.
     cluster_from->Merge(cluster_to);
-    // Update `cycle_graph_`'s ID.
-    cluster_from->set_cycles_graph_node_id(optional_merged_node.value());
 
     // Merge the UnionFind<Cluster*>.
     cluster_for_node_[from].Merge(&cluster_for_node_[to]);
@@ -1920,7 +1911,6 @@ absl::flat_hash_set<string> GetKnownXLAWhitelistOp() {
                                      "LinSpace",
                                      "ListDiff",
                                      "LogMatrixDeterminant",
-                                     "LowerBound",
                                      "MatMul",
                                      "MatrixBandPart",
                                      "MatrixDiag",
@@ -2047,7 +2037,6 @@ absl::flat_hash_set<string> GetKnownXLAWhitelistOp() {
                                      "TensorScatterUpdate",
                                      "TridiagonalSolve",
                                      "TruncatedNormal",
-                                     "UpperBound",
                                      "UnsortedSegmentMax",
                                      "UnsortedSegmentMin",
                                      "UnsortedSegmentProd",

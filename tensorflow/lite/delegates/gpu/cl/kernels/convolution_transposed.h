@@ -38,10 +38,10 @@ namespace cl {
 class ConvolutionTransposed : public GPUOperation {
  public:
   ConvolutionTransposed() = default;
-  absl::Status AddToQueue(CLCommandQueue* queue) override;
-  absl::Status Tune(const TuningParameters& params) override;
+  Status AddToQueue(CLCommandQueue* queue) override;
+  Status Tune(const TuningParameters& params) override;
 
-  absl::Status Compile(const CreationContext& creation_context) override;
+  Status Compile(const CreationContext& creation_context) override;
 
   // Move only
   ConvolutionTransposed(ConvolutionTransposed&& operation);
@@ -50,7 +50,7 @@ class ConvolutionTransposed : public GPUOperation {
   ConvolutionTransposed& operator=(const ConvolutionTransposed&) = delete;
 
  private:
-  friend absl::Status CreateConvolutionTransposed(
+  friend Status CreateConvolutionTransposed(
       const CreationContext& creation_context, const OperationDef& definition,
       const ConvolutionTransposedAttributes& attr,
       ConvolutionTransposed* result);
@@ -58,14 +58,14 @@ class ConvolutionTransposed : public GPUOperation {
                                  const ConvolutionTransposedAttributes& attr,
                                  const CLDevice& device);
   template <DataType T>
-  absl::Status UploadWeights(const tflite::gpu::Tensor<OHWI, T>& weights,
-                             CLContext* context);
+  Status UploadWeights(const ::tflite::gpu::Tensor<OHWI, T>& weights,
+                       CLContext* context);
 
   template <DataType S, typename T>
-  void RearrangeWeightsData(const tflite::gpu::Tensor<OHWI, S>& weights,
+  void RearrangeWeightsData(const ::tflite::gpu::Tensor<OHWI, S>& weights,
                             absl::Span<T> dst);
 
-  absl::Status BindArguments();
+  Status BindArguments();
   int3 GetGridSize() const;
 
   LinearStorage biases_;
@@ -88,8 +88,8 @@ class ConvolutionTransposed : public GPUOperation {
 };
 
 template <DataType T>
-absl::Status ConvolutionTransposed::UploadWeights(
-    const tflite::gpu::Tensor<OHWI, T>& weights, CLContext* context) {
+Status ConvolutionTransposed::UploadWeights(
+    const ::tflite::gpu::Tensor<OHWI, T>& weights, CLContext* context) {
   const int dst_depth =
       AlignByN(IntegralDivideRoundUp(weights.shape.o, 4), block_size_.z);
   const int src_depth = IntegralDivideRoundUp(weights.shape.i, 4);
@@ -153,12 +153,12 @@ absl::Status ConvolutionTransposed::UploadWeights(
     }
   }
 
-  return absl::OkStatus();
+  return OkStatus();
 }
 
 template <DataType S, typename T>
 void ConvolutionTransposed::RearrangeWeightsData(
-    const tflite::gpu::Tensor<OHWI, S>& weights, absl::Span<T> dst) {
+    const ::tflite::gpu::Tensor<OHWI, S>& weights, absl::Span<T> dst) {
   const int dst_depth =
       AlignByN(IntegralDivideRoundUp(weights.shape.o, 4), block_size_.z);
   const int src_depth = IntegralDivideRoundUp(weights.shape.i, 4);
@@ -208,9 +208,10 @@ void ConvolutionTransposed::RearrangeWeightsData(
   }
 }
 
-absl::Status CreateConvolutionTransposed(
-    const CreationContext& creation_context, const OperationDef& definition,
-    const ConvolutionTransposedAttributes& attr, ConvolutionTransposed* result);
+Status CreateConvolutionTransposed(const CreationContext& creation_context,
+                                   const OperationDef& definition,
+                                   const ConvolutionTransposedAttributes& attr,
+                                   ConvolutionTransposed* result);
 
 }  // namespace cl
 }  // namespace gpu

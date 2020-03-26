@@ -34,15 +34,7 @@ limitations under the License.
 #include "tensorflow/lite/stderr_reporter.h"
 #include "tensorflow/lite/type_to_tflitetype.h"
 
-#if TFLITE_EXPERIMENTAL_RUNTIME_EAGER
-#include "tensorflow/lite/experimental/tf_runtime/public/eager_interpreter.h"
-#endif
-
 namespace tflite {
-
-class InterpreterTest;
-
-namespace impl {
 
 /// An interpreter for a graph of nodes that input and output from tensors.
 /// Each node of the graph processes a set of input tensors and produces a
@@ -502,7 +494,7 @@ class Interpreter {
 
  private:
   friend class InterpreterBuilder;
-  friend class tflite::InterpreterTest;
+  friend class InterpreterTest;
 
   /// Set the value of an external context.
   static void SetExternalContext(struct TfLiteContext* context,
@@ -549,14 +541,6 @@ class Interpreter {
   // A map of resources. Owned by interpreter and shared by multiple subgraphs.
   resource::ResourceMap resources_;
 };
-
-}  // namespace impl
-
-#if TFLITE_EXPERIMENTAL_RUNTIME_EAGER
-using Interpreter = tflrt::EagerInterpreter;
-#else
-using Interpreter = impl::Interpreter;
-#endif
 
 }  // namespace tflite
 #endif  // TENSORFLOW_LITE_INTERPRETER_H_

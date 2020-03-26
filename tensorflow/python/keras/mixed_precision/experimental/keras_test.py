@@ -31,8 +31,8 @@ from tensorflow.python.eager import context
 from tensorflow.python.eager import def_function
 from tensorflow.python.framework import constant_op
 from tensorflow.python.framework import dtypes
+from tensorflow.python.framework import test_util
 from tensorflow.python.keras import backend
-from tensorflow.python.keras import combinations
 from tensorflow.python.keras import keras_parameterized
 from tensorflow.python.keras import layers
 from tensorflow.python.keras import models
@@ -119,11 +119,11 @@ TESTCASES = ({
 })
 
 
-@combinations.generate(combinations.combine(mode=['graph', 'eager']))
 class KerasLayerTest(keras_parameterized.TestCase):
   """Test mixed precision with Keras layers."""
 
   @parameterized.named_parameters(*TESTCASES)
+  @test_util.run_in_graph_and_eager_modes
   def test_mixed_policies_(self, strategy_fn):
     for dtype in 'float16', 'bfloat16':
       x = constant_op.constant([1.])
@@ -142,6 +142,7 @@ class KerasLayerTest(keras_parameterized.TestCase):
         self.evaluate(variables.global_variables_initializer())
         self.assertEqual(self.evaluate(y), 1.)
 
+  @test_util.run_in_graph_and_eager_modes
   def test_layer_with_int_variable(self):
     class LayerWithIntVar(base_layer.Layer):
 
@@ -158,6 +159,7 @@ class KerasLayerTest(keras_parameterized.TestCase):
     self.assertEqual(layer(x).dtype, 'int32')
 
   @parameterized.named_parameters(*TESTCASES)
+  @test_util.run_in_graph_and_eager_modes
   def test_layer_with_non_autocast_variable(self, strategy_fn):
     x = constant_op.constant([1.])
     with strategy_fn().scope():
@@ -170,6 +172,7 @@ class KerasLayerTest(keras_parameterized.TestCase):
         self.assertEqual(self.evaluate(y), 1.)
 
   @parameterized.named_parameters(*TESTCASES)
+  @test_util.run_in_graph_and_eager_modes
   def test_layer_calling_tf_function(self, strategy_fn):
     x = constant_op.constant([1.])
     with strategy_fn().scope():
@@ -182,6 +185,7 @@ class KerasLayerTest(keras_parameterized.TestCase):
         self.assertEqual(self.evaluate(y), 1.)
 
   @parameterized.named_parameters(*TESTCASES)
+  @test_util.run_in_graph_and_eager_modes
   def test_layer_regularizer_runs_in_var_dtype(self, strategy_fn):
     x = constant_op.constant([1.])
     with strategy_fn().scope():
@@ -207,6 +211,7 @@ class KerasLayerTest(keras_parameterized.TestCase):
         self.assertEqual(self.evaluate(regularizer_loss), 1.)
 
   @parameterized.named_parameters(*TESTCASES)
+  @test_util.run_in_graph_and_eager_modes
   def test_passing_policy_to_layer(self, strategy_fn):
     x = constant_op.constant([1.], dtype=dtypes.float16)
     with strategy_fn().scope():
@@ -225,6 +230,7 @@ class KerasLayerTest(keras_parameterized.TestCase):
         self.assertEqual(layer(x).dtype, dtypes.float64)
         self.assertEqual(layer.v.dtype, dtypes.float64)
 
+  @test_util.run_in_graph_and_eager_modes
   def test_error_passing_policy_string_to_layer(self):
     with self.assertRaisesRegexp(
         TypeError, "Cannot convert value 'mixed_float16' to a "
@@ -234,6 +240,7 @@ class KerasLayerTest(keras_parameterized.TestCase):
       mp_test_util.MultiplyLayer(dtype='mixed_float16')
 
   @parameterized.named_parameters(*TESTCASES)
+  @test_util.run_in_graph_and_eager_modes
   def test_gradient(self, strategy_fn):
     x = constant_op.constant([1.])
     with strategy_fn().scope() as strategy:
@@ -301,19 +308,17 @@ class KerasLayerTest(keras_parameterized.TestCase):
     self.assertEqual(self.evaluate(layer(x)), 100.)
 
   @parameterized.named_parameters(*TESTCASES)
+  @test_util.run_in_graph_and_eager_modes
   def test_checkpointing_layer_weights(self, strategy_fn):
-    with self.test_session():
-      self._test_checkpointing_layer_weights(
-          strategy_fn, mixed_prec_when_saving=True,
-          mixed_prec_when_loading=True)
-      self._test_checkpointing_layer_weights(
-          strategy_fn, mixed_prec_when_saving=True,
-          mixed_prec_when_loading=False)
-      self._test_checkpointing_layer_weights(
-          strategy_fn, mixed_prec_when_saving=False,
-          mixed_prec_when_loading=True)
+    self._test_checkpointing_layer_weights(
+        strategy_fn, mixed_prec_when_saving=True, mixed_prec_when_loading=True)
+    self._test_checkpointing_layer_weights(
+        strategy_fn, mixed_prec_when_saving=True, mixed_prec_when_loading=False)
+    self._test_checkpointing_layer_weights(
+        strategy_fn, mixed_prec_when_saving=False, mixed_prec_when_loading=True)
 
   @parameterized.named_parameters(*TESTCASES)
+  @test_util.run_in_graph_and_eager_modes
   def test_config(self, strategy_fn):
     x = constant_op.constant([1.], dtype=dtypes.float16)
     with strategy_fn().scope():
@@ -366,24 +371,24 @@ class KerasLayerTest(keras_parameterized.TestCase):
       self.assertEqual(layer(x).dtype, 'float64')
       self.assertEqual(layer.v.dtype, 'float64')
 
-      layer = mp_test_util.MultiplyLayer(dtype=policy.Policy('_infer'))
+      layer = mp_test_util.MultiplyLayer(dtype=policy.Policy('infer'))
       config = layer.get_config()
       self.assertIsNone(config['dtype'])
       layer = mp_test_util.MultiplyLayer.from_config(config)
-      # If a layer is serialized with the "_infer" policy, when deserialized
-      # into TF 2 it will have the global policy instead of "_infer". This is
-      # because "_infer" is serialized into None, and passing dtype=None in
-      # TensorFlow 2 indicates to use the global policy.
+      # If a layer is serialized with the "infer" policy, when deserialized into
+      # TF 2 it will have the global policy instead of "infer". This is because
+      # "infer" is serialized into None, and passing dtype=None in TensorFlow 2
+      # indicates to use the global policy.
       self.assertEqual(layer.dtype, 'float32')
       self.assertEqual(layer(x).dtype, 'float32')
       self.assertEqual(layer.v.dtype, 'float32')
 
-      layer = mp_test_util.MultiplyLayer(dtype=policy.Policy('_infer',
+      layer = mp_test_util.MultiplyLayer(dtype=policy.Policy('infer',
                                                              loss_scale=2.))
       config = layer.get_config()
       self.assertEqual(config['dtype'],
                        {'class_name': 'Policy',
-                        'config': {'name': '_infer',
+                        'config': {'name': 'infer',
                                    'loss_scale': {
                                        'class_name': 'FixedLossScale',
                                        'config': {'loss_scale_value': 2.0}}}})
@@ -392,6 +397,7 @@ class KerasLayerTest(keras_parameterized.TestCase):
       self.assertEqual(layer(x).dtype, 'float16')
       self.assertEqual(layer.v.dtype, 'float16')
 
+  @test_util.run_in_graph_and_eager_modes
   def test_delete_variable(self):
     layer = base_layer.Layer(dtype=policy.Policy('mixed_float16'))
     layer.x = layer.add_weight('x')
@@ -399,6 +405,7 @@ class KerasLayerTest(keras_parameterized.TestCase):
     del layer.x
     self.assertEqual(layer.trainable_weights, [])
 
+  @test_util.run_in_graph_and_eager_modes
   def test_build_and_call_layer_in_function(self):
     layer = mp_test_util.MultiplyLayer(dtype=policy.Policy('mixed_float16'))
     @def_function.function
@@ -409,18 +416,6 @@ class KerasLayerTest(keras_parameterized.TestCase):
     self.assertEqual(y.dtype, 'float16')
     self.assertEqual(layer.v.dtype, 'float32')
     self.assertEqual(self.evaluate(y), 1.)
-
-  def test_unsupported_strategy(self):
-    strategy = create_central_storage_strategy()
-    with strategy.scope(), self.assertRaisesRegexp(
-        ValueError, 'Mixed precision is not supported with the '
-                    'tf.distribute.Strategy: CentralStorageStrategy. Either '
-                    'stop using mixed precision by removing the use of the '
-                    '"mixed_float16" policy or use a different Strategy, e.g. '
-                    'a MirroredStrategy.'):
-      mp_test_util.MultiplyLayer(dtype=policy.Policy('mixed_float16'))
-    # Non-mixed policies are fine
-    mp_test_util.MultiplyLayer(dtype=policy.Policy('float64'))
 
 
 class KerasModelTest(keras_parameterized.TestCase):
@@ -496,6 +491,11 @@ class KerasModelTest(keras_parameterized.TestCase):
           'strategy_fn': create_mirrored_strategy,
           'save_format': 'h5',
           'use_regularizer': True,
+      }, {
+          'testcase_name': 'central_storage',
+          'strategy_fn': create_central_storage_strategy,
+          'use_regularizer': True,
+          'save_format': 'tf'
       })
   def test_model(self,
                  strategy_fn,
@@ -743,6 +743,10 @@ class KerasModelTest(keras_parameterized.TestCase):
           'strategy_fn': create_mirrored_strategy,
           'get_config': True,
           'pass_loss_scale_to_policy': True,
+      }, {
+          'testcase_name': 'central_storage',
+          'strategy_fn': create_central_storage_strategy,
+          'get_config': True,
       })
   def test_dynamic_loss_scaling(self,
                                 strategy_fn,
@@ -829,7 +833,7 @@ class KerasModelTest(keras_parameterized.TestCase):
     model.fit(dataset)
     self.assertEqual(backend.eval(layer.v), -3)
 
-  @combinations.generate(combinations.combine(mode=['graph', 'eager']))
+  @test_util.run_in_graph_and_eager_modes
   def test_loss_scale_optimizer_overrides_policy_loss_scale(self):
     with policy.policy_scope(policy.Policy('float32', loss_scale=10.)):
       opt = gradient_descent.SGD(1.)
@@ -840,7 +844,7 @@ class KerasModelTest(keras_parameterized.TestCase):
       model.compile(opt, loss='mse')
       self.assertEqual(self.evaluate(model.optimizer.loss_scale()), 5.)
 
-  @combinations.generate(combinations.combine(mode=['graph', 'eager']))
+  @test_util.run_in_graph_and_eager_modes
   def test_pass_invalid_optimizer_with_loss_scaling(self):
     with policy.policy_scope(policy.Policy('float32', loss_scale=10.)):
       x = layers.Input(shape=(1,))
@@ -853,7 +857,7 @@ class KerasModelTest(keras_parameterized.TestCase):
       with self.assertRaisesRegexp(ValueError, error_msg):
         model.compile(optimizers.SGD(1.), 'mse')
 
-  @combinations.generate(combinations.combine(mode=['graph', 'eager']))
+  @test_util.run_in_graph_and_eager_modes
   def test_functional_model_loss_dtype(self):
     with policy.policy_scope('float16'):
       x = layers.Input(shape=(1,))
@@ -863,7 +867,6 @@ class KerasModelTest(keras_parameterized.TestCase):
       # The loss should not be casted to the policy's dtype.
       self.assertEqual(model.losses[0].dtype, 'float32')
 
-  @keras_parameterized.run_all_keras_modes
   @parameterized.named_parameters(
       {
           'testcase_name': 'base',
@@ -880,6 +883,7 @@ class KerasModelTest(keras_parameterized.TestCase):
           'strategy_fn': create_mirrored_strategy,
           'h5': True,
       })
+  @test_util.run_in_graph_and_eager_modes
   def test_save_weights_with_autocast_vars(self, strategy_fn, h5=False):
     with strategy_fn().scope():
       with policy.policy_scope('mixed_float16'):

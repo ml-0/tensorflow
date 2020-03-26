@@ -20,7 +20,6 @@ from __future__ import print_function
 
 import copy
 
-from absl.testing import parameterized
 import numpy as np
 
 from tensorflow.python.eager import context
@@ -28,7 +27,6 @@ from tensorflow.python.framework import constant_op
 from tensorflow.python.framework import dtypes
 from tensorflow.python.framework import ops
 from tensorflow.python.framework import test_util
-from tensorflow.python.keras import combinations
 from tensorflow.python.keras.optimizer_v2 import adagrad
 from tensorflow.python.keras.optimizer_v2 import learning_rate_schedule
 from tensorflow.python.ops import embedding_ops
@@ -70,7 +68,7 @@ def sparse_adagrad_update_numpy(param,
   return param_t, accum_t
 
 
-class AdagradOptimizerTest(test.TestCase, parameterized.TestCase):
+class AdagradOptimizerTest(test.TestCase):
 
   def doTestBasic(self, use_callable_params=False):
     for dtype in _DATA_TYPES:
@@ -115,7 +113,7 @@ class AdagradOptimizerTest(test.TestCase, parameterized.TestCase):
         self.assertAllCloseAccordingToType(var0_np, self.evaluate(var0))
         self.assertAllCloseAccordingToType(var1_np, self.evaluate(var1))
 
-  @combinations.generate(combinations.combine(mode=["graph", "eager"]))
+  @test_util.run_in_graph_and_eager_modes(reset_test=True)
   def testBasic(self):
     self.doTestBasic()
 

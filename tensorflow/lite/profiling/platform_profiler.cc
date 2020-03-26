@@ -27,7 +27,7 @@ namespace profiling {
 
 std::unique_ptr<tflite::Profiler> CreatePlatformProfiler() {
 #if defined(__ANDROID__)
-  return CreateATraceProfiler();
+  return std::unique_ptr<tflite::Profiler>(new ATraceProfiler());
 #else
   return std::unique_ptr<tflite::Profiler>(nullptr);
 #endif

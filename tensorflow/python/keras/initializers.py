@@ -14,11 +14,6 @@
 # ==============================================================================
 """Keras initializer serialization / deserialization.
 """
-# pylint: disable=unused-import
-# pylint: disable=line-too-long
-# pylint: disable=g-import-not-at-top
-# pylint: disable=g-bad-import-order
-# pylint: disable=invalid-name
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
@@ -33,6 +28,23 @@ from tensorflow.python.ops import init_ops_v2
 
 # These imports are brought in so that keras.initializers.deserialize
 # has them available in module_objects.
+from tensorflow.python.ops.init_ops import Constant
+from tensorflow.python.ops.init_ops import GlorotNormal
+from tensorflow.python.ops.init_ops import GlorotUniform
+from tensorflow.python.ops.init_ops import he_normal  # pylint: disable=unused-import
+from tensorflow.python.ops.init_ops import he_uniform  # pylint: disable=unused-import
+from tensorflow.python.ops.init_ops import Identity
+from tensorflow.python.ops.init_ops import Initializer  # pylint: disable=unused-import
+from tensorflow.python.ops.init_ops import lecun_normal  # pylint: disable=unused-import
+from tensorflow.python.ops.init_ops import lecun_uniform  # pylint: disable=unused-import
+from tensorflow.python.ops.init_ops import Ones
+from tensorflow.python.ops.init_ops import Orthogonal
+from tensorflow.python.ops.init_ops import RandomNormal as TFRandomNormal
+from tensorflow.python.ops.init_ops import RandomUniform as TFRandomUniform
+from tensorflow.python.ops.init_ops import TruncatedNormal as TFTruncatedNormal
+from tensorflow.python.ops.init_ops import VarianceScaling  # pylint: disable=unused-import
+from tensorflow.python.ops.init_ops import Zeros
+# pylint: disable=unused-import, disable=line-too-long
 from tensorflow.python.ops.init_ops_v2 import Constant as ConstantV2
 from tensorflow.python.ops.init_ops_v2 import GlorotNormal as GlorotNormalV2
 from tensorflow.python.ops.init_ops_v2 import GlorotUniform as GlorotUniformV2
@@ -49,46 +61,14 @@ from tensorflow.python.ops.init_ops_v2 import RandomUniform as RandomUniformV2
 from tensorflow.python.ops.init_ops_v2 import TruncatedNormal as TruncatedNormalV2
 from tensorflow.python.ops.init_ops_v2 import VarianceScaling as VarianceScalingV2
 from tensorflow.python.ops.init_ops_v2 import Zeros as ZerosV2
-
-if tf2.enabled():
-  Constant = ConstantV2
-  GlorotNormal = GlorotNormalV2
-  GlorotUniform = GlorotUniformV2
-  he_normal = he_normalV2
-  he_uniform = he_uniformV2
-  Identity = IdentityV2
-  Initializer = InitializerV2
-  lecun_normal = lecun_normalV2
-  lecun_uniform = lecun_uniformV2
-  Ones = OnesV2
-  Orthogonal = OrthogonalV2
-  VarianceScaling = VarianceScalingV2
-  Zeros = ZerosV2
-else:
-  from tensorflow.python.ops.init_ops import Constant
-  from tensorflow.python.ops.init_ops import GlorotNormal
-  from tensorflow.python.ops.init_ops import GlorotUniform
-  from tensorflow.python.ops.init_ops import he_normal
-  from tensorflow.python.ops.init_ops import he_uniform
-  from tensorflow.python.ops.init_ops import Identity
-  from tensorflow.python.ops.init_ops import Initializer
-  from tensorflow.python.ops.init_ops import lecun_normal
-  from tensorflow.python.ops.init_ops import lecun_uniform
-  from tensorflow.python.ops.init_ops import Ones
-  from tensorflow.python.ops.init_ops import Orthogonal
-  from tensorflow.python.ops.init_ops import VarianceScaling
-  from tensorflow.python.ops.init_ops import Zeros
-
-from tensorflow.python.ops.init_ops import RandomNormal as TFRandomNormalV1
-from tensorflow.python.ops.init_ops import RandomUniform as TFRandomUniformV1
-from tensorflow.python.ops.init_ops import TruncatedNormal as TFTruncatedNormalV1
+# pylint: enable=unused-import, enable=line-too-long
 
 from tensorflow.python.util.tf_export import keras_export
 
 
 @keras_export(v1=['keras.initializers.TruncatedNormal',
                   'keras.initializers.truncated_normal'])
-class TruncatedNormalV1(TFTruncatedNormalV1):
+class TruncatedNormal(TFTruncatedNormal):
   """Initializer that generates a truncated normal distribution.
 
   These values are similar to values from a `random_normal_initializer`
@@ -104,20 +84,20 @@ class TruncatedNormalV1(TFTruncatedNormalV1):
     seed: A Python integer. Used to create random seeds. See
       `tf.compat.v1.set_random_seed` for behavior.
     dtype: The data type. Only floating point types are supported.
-
+    
   Returns:
     A TruncatedNormal instance.
   """
 
   def __init__(self, mean=0.0, stddev=0.05, seed=None, dtype=dtypes.float32):
-    super(TruncatedNormalV1, self).__init__(
+    super(TruncatedNormal, self).__init__(
         mean=mean, stddev=stddev, seed=seed, dtype=dtype)
 
 
 @keras_export(v1=['keras.initializers.RandomUniform',
                   'keras.initializers.uniform',
                   'keras.initializers.random_uniform'])
-class RandomUniformV1(TFRandomUniformV1):
+class RandomUniform(TFRandomUniform):
   """Initializer that generates tensors with a uniform distribution.
 
   Args:
@@ -128,21 +108,21 @@ class RandomUniformV1(TFRandomUniformV1):
     seed: A Python integer. Used to create random seeds. See
       `tf.compat.v1.set_random_seed` for behavior.
     dtype: The data type.
-
+    
   Returns:
     A RandomUniform instance.
   """
 
   def __init__(self, minval=-0.05, maxval=0.05, seed=None,
                dtype=dtypes.float32):
-    super(RandomUniformV1, self).__init__(
+    super(RandomUniform, self).__init__(
         minval=minval, maxval=maxval, seed=seed, dtype=dtype)
 
 
 @keras_export(v1=['keras.initializers.RandomNormal',
                   'keras.initializers.normal',
                   'keras.initializers.random_normal'])
-class RandomNormalV1(TFRandomNormalV1):
+class RandomNormal(TFRandomNormal):
   """Initializer that generates tensors with a normal distribution.
 
   Args:
@@ -159,20 +139,13 @@ class RandomNormalV1(TFRandomNormalV1):
   """
 
   def __init__(self, mean=0.0, stddev=0.05, seed=None, dtype=dtypes.float32):
-    super(RandomNormalV1, self).__init__(
+    super(RandomNormal, self).__init__(
         mean=mean, stddev=stddev, seed=seed, dtype=dtype)
 
 
-if tf2.enabled():
-  RandomNormal = RandomNormalV2
-  RandomUniform = RandomUniformV2
-  TruncatedNormal = TruncatedNormalV2
-else:
-  RandomNormal = RandomNormalV1
-  RandomUniform = RandomUniformV1
-  TruncatedNormal = TruncatedNormalV1
-
 # Compatibility aliases
+
+# pylint: disable=invalid-name
 zero = zeros = Zeros
 one = ones = Ones
 constant = Constant
@@ -183,6 +156,7 @@ identity = Identity
 orthogonal = Orthogonal
 glorot_normal = GlorotNormal
 glorot_uniform = GlorotUniform
+
 
 # Utility functions
 
@@ -232,3 +206,6 @@ def get(identifier):
   else:
     raise ValueError('Could not interpret initializer identifier: ' +
                      str(identifier))
+
+
+# pylint: enable=invalid-name

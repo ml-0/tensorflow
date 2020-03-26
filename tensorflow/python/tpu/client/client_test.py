@@ -396,7 +396,8 @@ class CloudTpuClientTest(test.TestCase):
         'Timed out waiting for TPU .* to become healthy'):
       c.wait_for_healthy(timeout_s=80, interval=5)
 
-  def baseConfigureTpuVersion(self):
+  @mock.patch.object(request, 'urlopen')
+  def testConfigureTpuVersion(self, urlopen):
     tpu_map = {
         'projects/test-project/locations/us-central1-c/nodes/tpu_name': {
             'state':
@@ -411,30 +412,18 @@ class CloudTpuClientTest(test.TestCase):
             ]
         }
     }
-    return client.Client(
+    c = client.Client(
         tpu='tpu_name',
         project='test-project',
         zone='us-central1-c',
         service=self.mock_service_client(tpu_map=tpu_map))
-
-  @mock.patch.object(request, 'urlopen')
-  def testConfigureTpuVersion(self, urlopen):
-    c = self.baseConfigureTpuVersion()
     c.configure_tpu_version('1.15')
-    paths = [call[0][0].full_url for call in urlopen.call_args_list]
-    self.assertEqual([
-        'http://1.2.3.4:8475/requestversion/1.15?restartType=always',
-        'http://5.6.7.8:8475/requestversion/1.15?restartType=always'
-    ], sorted(paths))
 
-  @mock.patch.object(request, 'urlopen')
-  def testConfigureTpuVersionRestartIfneeded(self, urlopen):
-    c = self.baseConfigureTpuVersion()
-    c.configure_tpu_version('1.15', restart_type='ifNeeded')
     paths = [call[0][0].full_url for call in urlopen.call_args_list]
+
     self.assertEqual([
-        'http://1.2.3.4:8475/requestversion/1.15?restartType=ifNeeded',
-        'http://5.6.7.8:8475/requestversion/1.15?restartType=ifNeeded'
+        'http://1.2.3.4:8475/requestversion/1.15',
+        'http://5.6.7.8:8475/requestversion/1.15'
     ], sorted(paths))
 
 

@@ -207,10 +207,7 @@ cc_library(
         "//tensorflow/core/kernels:__subpackages__",
         "//tensorflow/stream_executor:__subpackages__",
     ],
-    deps = [
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/types:span",
-    ],
+    deps = ["@com_google_absl//absl/strings"],
 )
 
 cc_library(
@@ -223,7 +220,6 @@ cc_library(
         "//tensorflow/compiler/xla/service/mlir_gpu:__subpackages__",
         "//tensorflow/core/kernels:__subpackages__",
         "//tensorflow/stream_executor:__subpackages__",
-        "//third_party/tf_runtime/tools/tf_kernel_gen:__subpackages__",
     ],
     deps = if_gpu_is_configured([
         ":gpu_asm_opts",

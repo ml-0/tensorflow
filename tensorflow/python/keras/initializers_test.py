@@ -20,38 +20,33 @@ from __future__ import print_function
 
 import numpy as np
 
+from tensorflow.python import keras
 from tensorflow.python import tf2
 from tensorflow.python.framework import test_util
-from tensorflow.python.keras import backend
-from tensorflow.python.keras import combinations
-from tensorflow.python.keras import initializers
-from tensorflow.python.keras import models
-from tensorflow.python.keras.engine import input_layer
-from tensorflow.python.keras.layers import core
 from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import init_ops
 from tensorflow.python.platform import test
 
 
-@combinations.generate(combinations.combine(mode=['graph', 'eager']))
+@test_util.run_all_in_graph_and_eager_modes
 class KerasInitializersTest(test.TestCase):
 
   def _runner(self, init, shape, target_mean=None, target_std=None,
               target_max=None, target_min=None):
-    variable = backend.variable(init(shape))
-    output = backend.get_value(variable)
+    variable = keras.backend.variable(init(shape))
+    output = keras.backend.get_value(variable)
     # Test serialization (assumes deterministic behavior).
     config = init.get_config()
     reconstructed_init = init.__class__.from_config(config)
-    variable = backend.variable(reconstructed_init(shape))
-    output_2 = backend.get_value(variable)
+    variable = keras.backend.variable(reconstructed_init(shape))
+    output_2 = keras.backend.get_value(variable)
     self.assertAllClose(output, output_2, atol=1e-4)
 
   def test_uniform(self):
     tensor_shape = (9, 6, 7)
     with self.cached_session():
       self._runner(
-          initializers.RandomUniformV2(minval=-1, maxval=1, seed=124),
+          keras.initializers.RandomUniformV2(minval=-1, maxval=1, seed=124),
           tensor_shape,
           target_mean=0.,
           target_max=1,
@@ -61,7 +56,7 @@ class KerasInitializersTest(test.TestCase):
     tensor_shape = (8, 12, 99)
     with self.cached_session():
       self._runner(
-          initializers.RandomNormalV2(mean=0, stddev=1, seed=153),
+          keras.initializers.RandomNormalV2(mean=0, stddev=1, seed=153),
           tensor_shape,
           target_mean=0.,
           target_std=1)
@@ -70,7 +65,7 @@ class KerasInitializersTest(test.TestCase):
     tensor_shape = (12, 99, 7)
     with self.cached_session():
       self._runner(
-          initializers.TruncatedNormalV2(mean=0, stddev=1, seed=126),
+          keras.initializers.TruncatedNormalV2(mean=0, stddev=1, seed=126),
           tensor_shape,
           target_mean=0.,
           target_max=2,
@@ -80,7 +75,7 @@ class KerasInitializersTest(test.TestCase):
     tensor_shape = (5, 6, 4)
     with self.cached_session():
       self._runner(
-          initializers.ConstantV2(2.),
+          keras.initializers.ConstantV2(2.),
           tensor_shape,
           target_mean=2,
           target_max=2,
@@ -92,7 +87,7 @@ class KerasInitializersTest(test.TestCase):
       fan_in, _ = init_ops._compute_fans(tensor_shape)
       std = np.sqrt(1. / fan_in)
       self._runner(
-          initializers.lecun_uniformV2(seed=123),
+          keras.initializers.lecun_uniformV2(seed=123),
           tensor_shape,
           target_mean=0.,
           target_std=std)
@@ -103,7 +98,7 @@ class KerasInitializersTest(test.TestCase):
       fan_in, fan_out = init_ops._compute_fans(tensor_shape)
       std = np.sqrt(2. / (fan_in + fan_out))
       self._runner(
-          initializers.GlorotUniformV2(seed=123),
+          keras.initializers.GlorotUniformV2(seed=123),
           tensor_shape,
           target_mean=0.,
           target_std=std)
@@ -114,7 +109,7 @@ class KerasInitializersTest(test.TestCase):
       fan_in, _ = init_ops._compute_fans(tensor_shape)
       std = np.sqrt(2. / fan_in)
       self._runner(
-          initializers.he_uniformV2(seed=123),
+          keras.initializers.he_uniformV2(seed=123),
           tensor_shape,
           target_mean=0.,
           target_std=std)
@@ -125,7 +120,7 @@ class KerasInitializersTest(test.TestCase):
       fan_in, _ = init_ops._compute_fans(tensor_shape)
       std = np.sqrt(1. / fan_in)
       self._runner(
-          initializers.lecun_normalV2(seed=123),
+          keras.initializers.lecun_normalV2(seed=123),
           tensor_shape,
           target_mean=0.,
           target_std=std)
@@ -136,7 +131,7 @@ class KerasInitializersTest(test.TestCase):
       fan_in, fan_out = init_ops._compute_fans(tensor_shape)
       std = np.sqrt(2. / (fan_in + fan_out))
       self._runner(
-          initializers.GlorotNormalV2(seed=123),
+          keras.initializers.GlorotNormalV2(seed=123),
           tensor_shape,
           target_mean=0.,
           target_std=std)
@@ -147,7 +142,7 @@ class KerasInitializersTest(test.TestCase):
       fan_in, _ = init_ops._compute_fans(tensor_shape)
       std = np.sqrt(2. / fan_in)
       self._runner(
-          initializers.he_normalV2(seed=123),
+          keras.initializers.he_normalV2(seed=123),
           tensor_shape,
           target_mean=0.,
           target_std=std)
@@ -156,21 +151,23 @@ class KerasInitializersTest(test.TestCase):
     tensor_shape = (20, 20)
     with self.cached_session():
       self._runner(
-          initializers.OrthogonalV2(seed=123), tensor_shape, target_mean=0.)
+          keras.initializers.OrthogonalV2(seed=123),
+          tensor_shape,
+          target_mean=0.)
 
   def test_identity(self):
     with self.cached_session():
       tensor_shape = (3, 4, 5)
       with self.assertRaises(ValueError):
         self._runner(
-            initializers.IdentityV2(),
+            keras.initializers.IdentityV2(),
             tensor_shape,
             target_mean=1. / tensor_shape[0],
             target_max=1.)
 
       tensor_shape = (3, 3)
       self._runner(
-          initializers.IdentityV2(),
+          keras.initializers.IdentityV2(),
           tensor_shape,
           target_mean=1. / tensor_shape[0],
           target_max=1.)
@@ -179,26 +176,32 @@ class KerasInitializersTest(test.TestCase):
     tensor_shape = (4, 5)
     with self.cached_session():
       self._runner(
-          initializers.ZerosV2(), tensor_shape, target_mean=0., target_max=0.)
+          keras.initializers.ZerosV2(),
+          tensor_shape,
+          target_mean=0.,
+          target_max=0.)
 
   def test_one(self):
     tensor_shape = (4, 5)
     with self.cached_session():
       self._runner(
-          initializers.OnesV2(), tensor_shape, target_mean=1., target_max=1.)
+          keras.initializers.OnesV2(),
+          tensor_shape,
+          target_mean=1.,
+          target_max=1.)
 
   def test_default_random_uniform(self):
-    ru = initializers.get('uniform')
+    ru = keras.initializers.get('uniform')
     self.assertEqual(ru.minval, -0.05)
     self.assertEqual(ru.maxval, 0.05)
 
   def test_default_random_normal(self):
-    rn = initializers.get('normal')
+    rn = keras.initializers.get('normal')
     self.assertEqual(rn.mean, 0.0)
     self.assertEqual(rn.stddev, 0.05)
 
   def test_default_truncated_normal(self):
-    tn = initializers.get('truncated_normal')
+    tn = keras.initializers.get('truncated_normal')
     self.assertEqual(tn.mean, 0.0)
     self.assertEqual(tn.stddev, 0.05)
 
@@ -206,7 +209,7 @@ class KerasInitializersTest(test.TestCase):
     tf2_force_enabled = tf2._force_enable  # pylint: disable=protected-access
     try:
       tf2.enable()
-      rn = initializers.get('random_normal')
+      rn = keras.initializers.get('random_normal')
       self.assertIn('init_ops_v2', rn.__class__.__module__)
     finally:
       tf2._force_enable = tf2_force_enabled  # pylint: disable=protected-access
@@ -216,9 +219,9 @@ class KerasInitializersTest(test.TestCase):
     def my_initializer(shape, dtype=None):
       return array_ops.ones(shape, dtype=dtype)
 
-    inputs = input_layer.Input((10,))
-    outputs = core.Dense(1, kernel_initializer=my_initializer)(inputs)
-    model = models.Model(inputs, outputs)
+    inputs = keras.Input((10,))
+    outputs = keras.layers.Dense(1, kernel_initializer=my_initializer)(inputs)
+    model = keras.Model(inputs, outputs)
     model2 = model.from_config(
         model.get_config(), custom_objects={'my_initializer': my_initializer})
     self.assertEqual(model2.layers[1].kernel_initializer, my_initializer)
@@ -234,7 +237,7 @@ class KerasInitializersTest(test.TestCase):
             'seed': None
         }
     }
-    initializer = initializers.deserialize(external_serialized_json)
+    initializer = keras.initializers.deserialize(external_serialized_json)
     self.assertEqual(initializer.distribution, 'truncated_normal')
 
 

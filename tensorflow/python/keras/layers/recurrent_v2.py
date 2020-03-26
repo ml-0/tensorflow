@@ -44,8 +44,8 @@ from tensorflow.python.util.tf_export import keras_export
 
 # The following string constants are used by Defun approach for unified backend
 # of LSTM and GRU.
-_FUNCTION_API_NAME_ATTRIBUTE = 'api_implements'
-_FUNCTION_DEVICE_ATTRIBUTE = 'api_preferred_device'
+_DEFUN_API_NAME_ATTRIBUTE = 'api_implements'
+_DEFUN_DEVICE_ATTRIBUTE = 'api_preferred_device'
 _CPU_DEVICE_NAME = 'CPU'
 _GPU_DEVICE_NAME = 'GPU'
 
@@ -204,7 +204,7 @@ class GRU(recurrent.DropoutRNNCellMixin, recurrent.GRU):
   4. `unroll` is `False`
   5. `use_bias` is `True`
   6. `reset_after` is `True`
-  7. Inputs, if use masking, are strictly right-padded.
+  7. Inputs are not masked or strictly right padded.
 
   There are two variants of the GRU implementation. The default one is based on
   [v3](https://arxiv.org/abs/1406.1078v3) and has reset gate applied to hidden
@@ -466,10 +466,10 @@ class GRU(recurrent.DropoutRNNCellMixin, recurrent.GRU):
 
     gpu_gru_kwargs = {
         'inputs': inputs,
-        'init_h': _read_variable_value(initial_state[0]),
-        'kernel': _read_variable_value(self.cell.kernel),
-        'recurrent_kernel': _read_variable_value(self.cell.recurrent_kernel),
-        'bias': _read_variable_value(self.cell.bias),
+        'init_h': initial_state[0],
+        'kernel': self.cell.kernel,
+        'recurrent_kernel': self.cell.recurrent_kernel,
+        'bias': self.cell.bias,
         'mask': mask,
         'time_major': self.time_major,
         'go_backwards': self.go_backwards,
@@ -477,6 +477,8 @@ class GRU(recurrent.DropoutRNNCellMixin, recurrent.GRU):
     }
     normal_gru_kwargs = gpu_gru_kwargs.copy()
     normal_gru_kwargs.update({
+        'activation': self.activation,
+        'recurrent_activation': self.recurrent_activation,
         'zero_output_for_mask': self.zero_output_for_mask,
     })
 
@@ -501,9 +503,9 @@ class GRU(recurrent.DropoutRNNCellMixin, recurrent.GRU):
     return last_output, outputs, runtime, states
 
 
-def standard_gru(inputs, init_h, kernel, recurrent_kernel, bias, mask,
-                 time_major, go_backwards, sequence_lengths,
-                 zero_output_for_mask):
+def standard_gru(inputs, init_h, kernel, recurrent_kernel, bias, activation,
+                 recurrent_activation, mask, time_major, go_backwards,
+                 sequence_lengths, zero_output_for_mask):
   """GRU with standard kernel implementation.
 
   This implementation can be run on all types of hardware.
@@ -520,6 +522,8 @@ def standard_gru(inputs, init_h, kernel, recurrent_kernel, bias, mask,
     recurrent_kernel: Weights for cell recurrent kernel.
     bias: Weights for cell kernel bias and recurrent bias. The bias contains the
       combined input_bias and recurrent_bias.
+    activation: Activation function to use for output.
+    recurrent_activation: Activation function to use for hidden recurrent state.
     mask: Binary tensor of shape `(samples, timesteps)` indicating whether
       a given timestep should be masked.
     time_major: Boolean, whether the inputs are in the format of
@@ -561,9 +565,9 @@ def standard_gru(inputs, init_h, kernel, recurrent_kernel, bias, mask,
 
     recurrent_z, recurrent_r, recurrent_h = array_ops.split(matrix_inner, 3,
                                                             axis=1)
-    z = nn.sigmoid(x_z + recurrent_z)
-    r = nn.sigmoid(x_r + recurrent_r)
-    hh = nn.tanh(x_h + r * recurrent_h)
+    z = recurrent_activation(x_z + recurrent_z)
+    r = recurrent_activation(x_r + recurrent_r)
+    hh = activation(x_h + r * recurrent_h)
 
     # previous and candidate state mixed by update gate
     h = z * h_tm1 + (1 - z) * hh
@@ -670,7 +674,8 @@ def gpu_gru(inputs, init_h, kernel, recurrent_kernel, bias, mask, time_major,
 
 
 def gru_with_backend_selection(inputs, init_h, kernel, recurrent_kernel, bias,
-                               mask, time_major, go_backwards, sequence_lengths,
+                               mask, time_major, go_backwards, activation,
+                               recurrent_activation, sequence_lengths,
                                zero_output_for_mask):
   """Call the GRU with optimized backend kernel selection.
 
@@ -695,6 +700,8 @@ def gru_with_backend_selection(inputs, init_h, kernel, recurrent_kernel, bias,
       [time, batch, feature] or [batch, time, feature].
     go_backwards: Boolean (default False). If True, process the input sequence
       backwards and return the reversed sequence.
+    activation: Activation function to use for output.
+    recurrent_activation: Activation function to use for hidden recurrent state.
     sequence_lengths: The lengths of all sequences coming from a variable length
       input, such as ragged tensors. If the input has a fixed timestep size,
       this should be None.
@@ -712,12 +719,15 @@ def gru_with_backend_selection(inputs, init_h, kernel, recurrent_kernel, bias,
       'mask': mask,
       'time_major': time_major,
       'go_backwards': go_backwards,
+      'activation': activation,
+      'recurrent_activation': recurrent_activation,
       'sequence_lengths': sequence_lengths,
       'zero_output_for_mask': zero_output_for_mask,
   }
 
   def gpu_gru_with_fallback(inputs, init_h, kernel, recurrent_kernel, bias,
-                            mask, time_major, go_backwards, sequence_lengths,
+                            mask, time_major, go_backwards, activation,
+                            recurrent_activation, sequence_lengths,
                             zero_output_for_mask):
     """Use CuDNN kernel when mask is none or strictly right padded."""
     if mask is None:
@@ -754,6 +764,8 @@ def gru_with_backend_selection(inputs, init_h, kernel, recurrent_kernel, bias,
           mask=mask,
           time_major=time_major,
           go_backwards=go_backwards,
+          activation=activation,
+          recurrent_activation=recurrent_activation,
           sequence_lengths=sequence_lengths,
           zero_output_for_mask=zero_output_for_mask)
 
@@ -767,14 +779,10 @@ def gru_with_backend_selection(inputs, init_h, kernel, recurrent_kernel, bias,
   # sees multiple GRU layers added into same graph, and it will be able
   # to pair up the different implementations across them.
   api_name = 'gru_' + str(uuid.uuid4())
-  supportive_attribute = {
-      'time_major': time_major,
-      'go_backwards': go_backwards,
-  }
   defun_standard_gru = _generate_defun_backend(
-      api_name, _CPU_DEVICE_NAME, standard_gru, supportive_attribute)
-  defun_gpu_gru = _generate_defun_backend(
-      api_name, _GPU_DEVICE_NAME, gpu_gru_with_fallback, supportive_attribute)
+      api_name, _CPU_DEVICE_NAME, standard_gru)
+  defun_gpu_gru = _generate_defun_backend(api_name, _GPU_DEVICE_NAME,
+                                          gpu_gru_with_fallback)
 
   # Call the normal GRU impl and register the CuDNN impl function. The
   # grappler will kick in during session execution to optimize the graph.
@@ -925,7 +933,7 @@ class LSTM(recurrent.DropoutRNNCellMixin, recurrent.LSTM):
   3. `recurrent_dropout` == 0
   4. `unroll` is `False`
   5. `use_bias` is `True`
-  6. Inputs, if use masking, are strictly right-padded.
+  6. Inputs are not masked or strictly right padded.
 
   For example:
 
@@ -1141,11 +1149,11 @@ class LSTM(recurrent.DropoutRNNCellMixin, recurrent.LSTM):
         inputs = inputs * dropout_mask[0]
       gpu_lstm_kwargs = {
           'inputs': inputs,
-          'init_h': _read_variable_value(initial_state[0]),
-          'init_c': _read_variable_value(initial_state[1]),
-          'kernel': _read_variable_value(self.cell.kernel),
-          'recurrent_kernel': _read_variable_value(self.cell.recurrent_kernel),
-          'bias': _read_variable_value(self.cell.bias),
+          'init_h': initial_state[0],
+          'init_c': initial_state[1],
+          'kernel': self.cell.kernel,
+          'recurrent_kernel': self.cell.recurrent_kernel,
+          'bias': self.cell.bias,
           'mask': mask,
           'time_major': self.time_major,
           'go_backwards': self.go_backwards,
@@ -1153,6 +1161,8 @@ class LSTM(recurrent.DropoutRNNCellMixin, recurrent.LSTM):
       }
       normal_lstm_kwargs = gpu_lstm_kwargs.copy()
       normal_lstm_kwargs.update({
+          'activation': self.activation,
+          'recurrent_activation': self.recurrent_activation,
           'zero_output_for_mask': self.zero_output_for_mask,
       })
 
@@ -1179,10 +1189,9 @@ class LSTM(recurrent.DropoutRNNCellMixin, recurrent.LSTM):
       states = [new_h, new_c]
 
     if self.stateful:
-      updates = [
-          state_ops.assign(self_state, state)
-          for self_state, state in zip(self.states, states)
-      ]
+      updates = []
+      for i in range(len(states)):
+        updates.append(state_ops.assign(self.states[i], states[i]))
       self.add_update(updates)
 
     if self.return_sequences:
@@ -1230,8 +1239,8 @@ def _canonical_to_params(weights, biases, shape, transpose_weights=False):
 
 
 def standard_lstm(inputs, init_h, init_c, kernel, recurrent_kernel, bias,
-                  mask, time_major, go_backwards, sequence_lengths,
-                  zero_output_for_mask):
+                  activation, recurrent_activation, mask, time_major,
+                  go_backwards, sequence_lengths, zero_output_for_mask):
   """LSTM with standard kernel implementation.
 
   This implementation can be run on all types for hardware.
@@ -1254,6 +1263,8 @@ def standard_lstm(inputs, init_h, init_c, kernel, recurrent_kernel, bias,
     recurrent_kernel: weights for cell recurrent kernel.
     bias: weights for cell kernel bias and recurrent bias. Only recurrent bias
       is used in this case.
+    activation: Activation function to use for output.
+    recurrent_activation: Activation function to use for hidden recurrent state.
     mask: Boolean tensor for mask out the steps within sequence.
     time_major: boolean, whether the inputs are in the format of
       [time, batch, feature] or [batch, time, feature].
@@ -1288,12 +1299,12 @@ def standard_lstm(inputs, init_h, init_c, kernel, recurrent_kernel, bias,
 
     z0, z1, z2, z3 = array_ops.split(z, 4, axis=1)
 
-    i = nn.sigmoid(z0)
-    f = nn.sigmoid(z1)
-    c = f * c_tm1 + i * nn.tanh(z2)
-    o = nn.sigmoid(z3)
+    i = recurrent_activation(z0)
+    f = recurrent_activation(z1)
+    c = f * c_tm1 + i * activation(z2)
+    o = recurrent_activation(z3)
 
-    h = o * nn.tanh(c)
+    h = o * activation(c)
     return h, [h, c]
 
   last_output, outputs, new_states = K.rnn(
@@ -1435,8 +1446,8 @@ def gpu_lstm(inputs, init_h, init_c, kernel, recurrent_kernel, bias, mask,
 
 def lstm_with_backend_selection(inputs, init_h, init_c, kernel,
                                 recurrent_kernel, bias, mask, time_major,
-                                go_backwards, sequence_lengths,
-                                zero_output_for_mask):
+                                go_backwards, activation, recurrent_activation,
+                                sequence_lengths, zero_output_for_mask):
   """Call the LSTM with optimized backend kernel selection.
 
   Under the hood, this function will create two TF function, one with the most
@@ -1461,6 +1472,8 @@ def lstm_with_backend_selection(inputs, init_h, init_c, kernel,
       [time, batch, feature] or [batch, time, feature].
     go_backwards: Boolean (default False). If True, process the input sequence
       backwards and return the reversed sequence.
+    activation: Activation function to use for output.
+    recurrent_activation: Activation function to use for hidden recurrent state.
     sequence_lengths: The lengths of all sequences coming from a variable length
       input, such as ragged tensors. If the input has a fixed timestep size,
       this should be None.
@@ -1479,13 +1492,16 @@ def lstm_with_backend_selection(inputs, init_h, init_c, kernel,
       'mask': mask,
       'time_major': time_major,
       'go_backwards': go_backwards,
+      'activation': activation,
+      'recurrent_activation': recurrent_activation,
       'sequence_lengths': sequence_lengths,
       'zero_output_for_mask': zero_output_for_mask,
   }
 
   def gpu_lstm_with_fallback(inputs, init_h, init_c, kernel, recurrent_kernel,
-                             bias, mask, time_major, go_backwards,
-                             sequence_lengths, zero_output_for_mask):
+                             bias, mask, time_major, go_backwards, activation,
+                             recurrent_activation, sequence_lengths,
+                             zero_output_for_mask):
     """Use CuDNN kernel when mask is none or strictly right padded."""
     if mask is None:
       return gpu_lstm(
@@ -1524,6 +1540,8 @@ def lstm_with_backend_selection(inputs, init_h, init_c, kernel,
           mask=mask,
           time_major=time_major,
           go_backwards=go_backwards,
+          activation=activation,
+          recurrent_activation=recurrent_activation,
           sequence_lengths=sequence_lengths,
           zero_output_for_mask=zero_output_for_mask)
 
@@ -1537,14 +1555,10 @@ def lstm_with_backend_selection(inputs, init_h, init_c, kernel,
   # sees multiple LSTM layers added into same graph, and it will be able
   # to pair up the different implementations across them.
   api_name = 'lstm_' + str(uuid.uuid4())
-  supportive_attribute = {
-      'time_major': time_major,
-      'go_backwards': go_backwards,
-  }
   defun_standard_lstm = _generate_defun_backend(
-      api_name, _CPU_DEVICE_NAME, standard_lstm, supportive_attribute)
-  defun_gpu_lstm = _generate_defun_backend(
-      api_name, _GPU_DEVICE_NAME, gpu_lstm_with_fallback, supportive_attribute)
+      api_name, _CPU_DEVICE_NAME, standard_lstm)
+  defun_gpu_lstm = _generate_defun_backend(api_name, _GPU_DEVICE_NAME,
+                                           gpu_lstm_with_fallback)
 
   # Call the normal LSTM impl and register the CuDNN impl function. The
   # grappler will kick in during session execution to optimize the graph.
@@ -1613,13 +1627,11 @@ def calculate_sequence_by_mask(mask, time_major):
                              axis=timestep_index)
 
 
-def _generate_defun_backend(unique_api_name, preferred_device, func,
-                            supportive_attributes):
+def _generate_defun_backend(unique_api_name, preferred_device, func):
   function_attributes = {
-      _FUNCTION_API_NAME_ATTRIBUTE: unique_api_name,
-      _FUNCTION_DEVICE_ATTRIBUTE: preferred_device,
+      _DEFUN_API_NAME_ATTRIBUTE: unique_api_name,
+      _DEFUN_DEVICE_ATTRIBUTE: preferred_device,
   }
-  function_attributes.update(supportive_attributes)
   return function.defun_with_attributes(func=func,
                                         attributes=function_attributes,
                                         autograph=False)
@@ -1637,10 +1649,3 @@ def _runtime(runtime_name):
   with ops.device('/cpu:0'):
     return constant_op.constant(
         runtime_name, dtype=dtypes.float32, name='runtime')
-
-
-def _read_variable_value(v):
-  """Read the value of a resource variable if it is variable."""
-  if resource_variable_ops.is_resource_variable(v):
-    return v.read_value()
-  return v

@@ -209,7 +209,7 @@ TfLiteStatus Eval(TfLiteContext* context, TfLiteNode* node) {
       GetInput(context, node, kRecurrentWeightsTensor);
   const TfLiteTensor* bias = GetInput(context, node, kBiasTensor);
   TfLiteTensor* hidden_state =
-      GetVariableInput(context, node, kHiddenStateTensor);
+      &context->tensors[node->inputs->data[kHiddenStateTensor]];
   TfLiteTensor* output = GetOutput(context, node, kOutputTensor);
 
   // We already checked that weight types are consistent, so branch on one.

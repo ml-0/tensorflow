@@ -119,9 +119,8 @@ class AssertNextDatasetOp::Dataset : public DatasetBase {
                                        /*ratio=*/1);
     }
 
-    Status SaveInternal(SerializationContext* ctx,
-                        IteratorStateWriter* writer) override {
-      TF_RETURN_IF_ERROR(SaveInput(ctx, writer, input_impl_));
+    Status SaveInternal(IteratorStateWriter* writer) override {
+      TF_RETURN_IF_ERROR(SaveInput(writer, input_impl_));
       return Status::OK();
     }
 

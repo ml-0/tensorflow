@@ -24,8 +24,4 @@ tf_module {
     name: "TPUStrategy"
     mtype: "<type \'type\'>"
   }
-  member {
-    name: "ValueContext"
-    mtype: "<type \'type\'>"
-  }
 }

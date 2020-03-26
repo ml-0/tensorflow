@@ -163,17 +163,6 @@ for tf_result, tflite_result in zip(tf_results, tflite_results):
   np.testing.assert_almost_equal(tf_result, tflite_result, decimal=5)
 ```
 
-#### TensorFlow Lite Metadata
-
-Note: TensorFlow Lite Metadata is in experimental (beta) phase.
-
-TensorFlow Lite metadata provides a standard for model descriptions. The
-metadata is an important source of knowledge about what the model does and its
-input / output information. This makes it easier for other developers to
-understand the best practices and for code generators to create platform
-specific wrapper code. For more information, please refer to the
-[TensorFlow Lite Metadata](metadata.md) section.
-
 ## Installing TensorFlow <a name="versioning"></a>
 
 ### Installing the TensorFlow nightly <a name="2.0-nightly"></a>
@@ -192,7 +181,7 @@ either install the nightly build with
 [Docker](https://www.tensorflow.org/install/docker), or
 [build the pip package from source](https://www.tensorflow.org/install/source).
 
-### Custom ops in the experimental new converter
+### Custom ops in the experimenal new converter
 
 There is a behavior change in how models containing
 [custom ops](https://www.tensorflow.org/lite/guide/ops_custom) (those for which

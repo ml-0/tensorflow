@@ -192,7 +192,7 @@ class ExponentialMovingAverageTest(test.TestCase, parameterized.TestCase):
           ema.apply([w])
           return ema.average(w)
 
-        return distribution.run(_ema_replica_fn_eager)
+        return distribution.experimental_run_v2(_ema_replica_fn_eager)
 
       if use_function:
         fn = def_function.function(fn)
@@ -238,7 +238,7 @@ class ExponentialMovingAverageTest(test.TestCase, parameterized.TestCase):
       self.skipTest("b/139550827: Cannot do variable.assign in replica context "
                     "of TPUStrategy")
     with distribution.scope():
-      w_assign, w_apply, ema_w = distribution.run(
+      w_assign, w_apply, ema_w = distribution.experimental_run_v2(
           self._ema_replica_fn_graph)
     self.assertEqual(ema_w.name, "w/ExponentialMovingAverage:0")
     with self.cached_session():

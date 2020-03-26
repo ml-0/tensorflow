@@ -18,17 +18,14 @@ limitations under the License.
 
 #include <memory>
 
-#include "tensorflow/compiler/xla/python/distributed/client.h"
 #include "tensorflow/compiler/xla/python/local_client.h"
 #include "tensorflow/compiler/xla/statusor.h"
-#include "tensorflow/core/common_runtime/bfc_allocator.h"
 
 namespace xla {
 
 class GpuDevice : public Device {
  public:
-  GpuDevice(int id, std::unique_ptr<LocalDeviceState> local_device_state,
-            int node_id);
+  GpuDevice(int id, std::unique_ptr<LocalDeviceState> local_device_state);
 };
 
 struct GpuAllocatorConfig {
@@ -51,11 +48,8 @@ struct GpuAllocatorConfig {
   bool preallocate = true;
 };
 
-// distributed_client may be nullptr in non-distributed settings.
-// distributed_client should not be Open()ed before calling this function.
 StatusOr<std::shared_ptr<PyLocalClient>> GetNvidiaGpuClient(
-    bool asynchronous, const GpuAllocatorConfig& allocator_config,
-    std::shared_ptr<DistributedRuntimeClient> distributed_client, int node_id);
+    bool asynchronous, const GpuAllocatorConfig& allocator_config);
 
 }  // namespace xla
 

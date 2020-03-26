@@ -16,7 +16,6 @@ limitations under the License.
 #ifndef TENSORFLOW_CORE_COMMON_RUNTIME_METRICS_H_
 #define TENSORFLOW_CORE_COMMON_RUNTIME_METRICS_H_
 
-#include "tensorflow/core/lib/monitoring/counter.h"
 #include "tensorflow/core/platform/types.h"
 
 namespace tensorflow {
@@ -27,11 +26,11 @@ namespace metrics {
 // The `name` argument identifies the Dataset type (e.g. "ParallelMap").
 void RecordTFDataAutotune(const string& name);
 
-// Returns a counter than can be used to record the number of bytes read from
-// the filesystem by a tf.data.Dataset source.
+// Records the number of bytes read from the filesystem by a tf.data.Dataset
+// source.
 //
 // The `name` argument identifies the Dataset type (e.g. "TFRecordDataset").
-monitoring::CounterCell* GetTFDataBytesReadCounter(const string& name);
+void RecordTFDataBytesRead(const string& name, int64 num_bytes);
 
 // Records the number of bytes fetched from tf.data.Dataset iterator.
 void RecordTFDataBytesFetched(int64 num_bytes);

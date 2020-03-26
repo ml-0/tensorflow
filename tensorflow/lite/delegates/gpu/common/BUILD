@@ -24,8 +24,8 @@ cc_library(
     srcs = ["custom_parsers.cc"],
     hdrs = ["custom_parsers.h"],
     deps = [
-        ":shape",
-        ":status",
+        "//tensorflow/lite/delegates/gpu/common:shape",
+        "//tensorflow/lite/delegates/gpu/common:status",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/types:any",
         "@flatbuffers",
@@ -92,7 +92,6 @@ cc_library(
         ":tensor",
         "@com_google_absl//absl/memory",
         "@com_google_absl//absl/types:any",
-        "@com_google_absl//absl/types:optional",
     ],
 )
 
@@ -121,7 +120,6 @@ cc_library(
         "//tensorflow/lite:kernel_api",
         "//tensorflow/lite:util",
         "//tensorflow/lite/c:common",
-        "//tensorflow/lite/delegates:utils",
         "//tensorflow/lite/delegates/gpu/common/transformations:general_transformations",
         "//tensorflow/lite/kernels:kernel_util",
         "//tensorflow/lite/schema:schema_fbs",
@@ -193,7 +191,6 @@ cc_test(
 cc_library(
     name = "status",
     hdrs = ["status.h"],
-    deps = ["@com_google_absl//absl/status"],
 )
 
 cc_library(
@@ -254,17 +251,6 @@ cc_test(
     deps = [
         ":util",
         "@com_google_googletest//:gtest_main",
-    ],
-)
-
-cc_library(
-    name = "winograd_util",
-    srcs = ["winograd_util.cc"],
-    hdrs = ["winograd_util.h"],
-    deps = [
-        ":data_type",
-        ":shape",
-        ":tensor",
     ],
 )
 

@@ -190,10 +190,6 @@ class ParallelMapDatasetOp::Dataset : public DatasetBase {
           ctx, &instantiated_captured_func_);
     }
 
-    Status CheckExternalState() override {
-      return dataset_->captured_func_->CheckExternalState();
-    }
-
     void MapFunc(IteratorContext* ctx, const string& prefix,
                  std::vector<Tensor> input_element, std::vector<Tensor>* result,
                  StatusCallback done) override {
@@ -233,6 +229,7 @@ ParallelMapDatasetOp::ParallelMapDatasetOp(OpKernelConstruction* ctx)
   FunctionMetadata::Params params;
   OP_REQUIRES_OK(ctx, ctx->GetAttr(kUseInterOpParallelism,
                                    &params.use_inter_op_parallelism));
+  params.is_multi_device_function = true;
   OP_REQUIRES_OK(ctx,
                  FunctionMetadata::Create(ctx, kFunc, params, &func_metadata_));
   OP_REQUIRES_OK(ctx, ctx->GetAttr(kOutputTypes, &output_types_));
@@ -377,10 +374,7 @@ class ParallelMapIterator : public DatasetBaseIterator {
                               /*max=*/ctx->runner_threadpool_size())});
   }
 
-  Status SaveInternal(SerializationContext* ctx,
-                      IteratorStateWriter* writer) override {
-    TF_RETURN_IF_ERROR(ctx->HandleCheckExternalStateStatus(
-        parallel_map_functor_->CheckExternalState()));
+  Status SaveInternal(IteratorStateWriter* writer) override {
     mutex_lock l(*mu_);
     // Wait for all in-flight calls to complete.
     while (num_calls_ > 0) {
@@ -390,7 +384,7 @@ class ParallelMapIterator : public DatasetBaseIterator {
       return errors::FailedPrecondition(
           "Unexpected outstanding calls encountered.");
     }
-    TF_RETURN_IF_ERROR(SaveInput(ctx, writer, input_impl_));
+    TF_RETURN_IF_ERROR(SaveInput(writer, input_impl_));
     TF_RETURN_IF_ERROR(writer->WriteScalar(
         full_name(strings::StrCat(kInvocationResults, kSizeSuffix)),
         invocation_results_.size()));
@@ -472,9 +466,8 @@ class ParallelMapIterator : public DatasetBaseIterator {
     result.push_back(std::make_pair("autotune", autotune_ ? "true" : "false"));
     result.push_back(
         std::make_pair("deterministic", deterministic_ ? "true" : "false"));
-    result.push_back(std::make_pair(
-        "parallelism",
-        strings::Printf("%lld", static_cast<long long>(parallelism))));
+    result.push_back(
+        std::make_pair("parallelism", strings::Printf("%lld", parallelism)));
     return result;
   }
 
@@ -486,7 +479,7 @@ class ParallelMapIterator : public DatasetBaseIterator {
     bool end_of_input;
   };
 
-  void CancelThreads(bool wait) TF_LOCKS_EXCLUDED(mu_) {
+  void CancelThreads(bool wait) LOCKS_EXCLUDED(mu_) {
     mutex_lock l(*mu_);
     cancelled_ = true;
     cond_var_->notify_all();
@@ -497,7 +490,7 @@ class ParallelMapIterator : public DatasetBaseIterator {
   }
 
   void EnsureThreadsStarted(IteratorContext* ctx)
-      TF_EXCLUSIVE_LOCKS_REQUIRED(*mu_) {
+      EXCLUSIVE_LOCKS_REQUIRED(*mu_) {
     if (!runner_thread_) {
       auto ctx_copy = std::make_shared<IteratorContext>(*ctx);
       runner_thread_ = ctx->StartThread(
@@ -513,7 +506,7 @@ class ParallelMapIterator : public DatasetBaseIterator {
 
   void CallCompleted(const std::shared_ptr<IteratorContext>& ctx,
                      const std::shared_ptr<InvocationResult>& result)
-      TF_LOCKS_EXCLUDED(*mu_) {
+      LOCKS_EXCLUDED(*mu_) {
     mutex_lock l(*mu_);
     num_calls_--;
     RecordBufferEnqueue(ctx.get(), result->return_values);
@@ -523,7 +516,7 @@ class ParallelMapIterator : public DatasetBaseIterator {
 
   void CallFunction(const std::shared_ptr<IteratorContext>& ctx,
                     const std::shared_ptr<InvocationResult>& result)
-      TF_LOCKS_EXCLUDED(*mu_) {
+      LOCKS_EXCLUDED(*mu_) {
     // Get the next input element.
     std::vector<Tensor> input_element;
     result->status =
@@ -548,7 +541,7 @@ class ParallelMapIterator : public DatasetBaseIterator {
   Status ProcessResult(IteratorContext* ctx,
                        const std::shared_ptr<InvocationResult>& result,
                        std::vector<Tensor>* out_tensors, bool* end_of_sequence)
-      TF_LOCKS_EXCLUDED(*mu_) {
+      LOCKS_EXCLUDED(*mu_) {
     if (!result->end_of_input && result->status.ok()) {
       *out_tensors = std::move(result->return_values);
       RecordBufferDequeue(ctx, *out_tensors);
@@ -575,7 +568,7 @@ class ParallelMapIterator : public DatasetBaseIterator {
   }
 
   void RunnerThread(const std::shared_ptr<IteratorContext>& ctx)
-      TF_LOCKS_EXCLUDED(*mu_) {
+      LOCKS_EXCLUDED(*mu_) {
     RecordStart(ctx.get());
     auto cleanup = gtl::MakeCleanup([this, ctx] { RecordStop(ctx.get()); });
     std::vector<std::shared_ptr<InvocationResult>> new_calls;
@@ -583,7 +576,7 @@ class ParallelMapIterator : public DatasetBaseIterator {
       tf_shared_lock l(*mu_);  // mu_ == num_parallel_calls_->mu
       new_calls.reserve(num_parallel_calls_->value);
     }
-    auto busy = [this]() TF_EXCLUSIVE_LOCKS_REQUIRED(*mu_) -> bool {
+    auto busy = [this]() EXCLUSIVE_LOCKS_REQUIRED(*mu_) -> bool {
       int64 num_parallel_calls = num_parallel_calls_->value;
       return num_calls_ >= num_parallel_calls ||
              invocation_results_.size() >= num_parallel_calls;
@@ -616,7 +609,7 @@ class ParallelMapIterator : public DatasetBaseIterator {
   // Determines whether the caller needs to wait for a result. Upon returning
   // false, `result` will point to the result.
   bool ShouldWait(std::shared_ptr<InvocationResult>* result)
-      TF_EXCLUSIVE_LOCKS_REQUIRED(*mu_) {
+      EXCLUSIVE_LOCKS_REQUIRED(*mu_) {
     if (cancelled_) {
       return false;
     }
@@ -670,7 +663,7 @@ class ParallelMapIterator : public DatasetBaseIterator {
 
   Status WriteStatusLocked(IteratorStateWriter* writer, size_t index,
                            const Status& status)
-      TF_EXCLUSIVE_LOCKS_REQUIRED(*mu_) {
+      EXCLUSIVE_LOCKS_REQUIRED(*mu_) {
     TF_RETURN_IF_ERROR(
         writer->WriteScalar(CodeKey(index), static_cast<int64>(status.code())));
     if (!status.ok()) {
@@ -681,7 +674,7 @@ class ParallelMapIterator : public DatasetBaseIterator {
   }
 
   Status ReadStatusLocked(IteratorStateReader* reader, size_t index,
-                          Status* status) TF_EXCLUSIVE_LOCKS_REQUIRED(*mu_) {
+                          Status* status) EXCLUSIVE_LOCKS_REQUIRED(*mu_) {
     int64 code_int;
     TF_RETURN_IF_ERROR(reader->ReadScalar(CodeKey(index), &code_int));
     error::Code code = static_cast<error::Code>(code_int);
@@ -725,15 +718,15 @@ class ParallelMapIterator : public DatasetBaseIterator {
   const bool autotune_;
   const string key_prefix_;
   // Counts the number of outstanding calls.
-  int64 num_calls_ TF_GUARDED_BY(*mu_) = 0;
+  int64 num_calls_ GUARDED_BY(*mu_) = 0;
   std::unique_ptr<IteratorBase> input_impl_;
   // Buffer for storing the invocation results.
   std::deque<std::shared_ptr<InvocationResult>> invocation_results_
-      TF_GUARDED_BY(*mu_);
+      GUARDED_BY(*mu_);
 
-  std::unique_ptr<Thread> runner_thread_ TF_GUARDED_BY(*mu_);
-  std::unique_ptr<Thread> stats_thread_ TF_GUARDED_BY(*mu_);
-  bool cancelled_ TF_GUARDED_BY(*mu_) = false;
+  std::unique_ptr<Thread> runner_thread_ GUARDED_BY(*mu_);
+  std::unique_ptr<Thread> stats_thread_ GUARDED_BY(*mu_);
+  bool cancelled_ GUARDED_BY(*mu_) = false;
 
   // Method for deregistering the cancellation callback.
   std::function<void()> deregister_fn_;

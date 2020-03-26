@@ -18,14 +18,13 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from absl.testing import parameterized
 import numpy as np
 
 from tensorflow.python.eager import context
 from tensorflow.python.framework import constant_op
 from tensorflow.python.framework import dtypes
 from tensorflow.python.framework import ops
-from tensorflow.python.keras import combinations
+from tensorflow.python.framework import test_util
 from tensorflow.python.keras.optimizer_v2 import adamax
 from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import math_ops
@@ -77,7 +76,7 @@ def get_beta_accumulators(opt, dtype):
   return beta_1_power
 
 
-class AdamaxOptimizerTest(test.TestCase, parameterized.TestCase):
+class AdamaxOptimizerTest(test.TestCase):
 
   def testResourceSparse(self):
     # TODO(tanzheny, omalleyt): Fix test in eager mode.
@@ -172,7 +171,7 @@ class AdamaxOptimizerTest(test.TestCase, parameterized.TestCase):
           self.assertAllClose(aggregated_update_var.eval(),
                               repeated_index_update_var.eval())
 
-  @combinations.generate(combinations.combine(mode=["graph", "eager"]))
+  @test_util.run_in_graph_and_eager_modes(reset_test=True)
   def testBasic(self):
     for i, dtype in enumerate([dtypes.half, dtypes.float32, dtypes.float64]):
       with self.session(graph=ops.Graph(), use_gpu=True):
@@ -223,7 +222,7 @@ class AdamaxOptimizerTest(test.TestCase, parameterized.TestCase):
           self.assertAllCloseAccordingToType(
               var1_np, self.evaluate(var1), rtol=1e-2)
 
-  @combinations.generate(combinations.combine(mode=["graph", "eager"]))
+  @test_util.run_in_graph_and_eager_modes(reset_test=True)
   def testBasicWithLearningRateDecay(self):
     for i, dtype in enumerate([dtypes.half, dtypes.float32, dtypes.float64]):
       with self.session(graph=ops.Graph(), use_gpu=True):

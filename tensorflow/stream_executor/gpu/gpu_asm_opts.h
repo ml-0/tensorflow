@@ -18,10 +18,8 @@ limitations under the License.
 
 #include <string>
 #include <tuple>
-#include <vector>
 
 #include "absl/strings/string_view.h"
-#include "absl/types/span.h"
 
 namespace stream_executor {
 // Compilation options for compiling ptxas.
@@ -32,21 +30,15 @@ struct GpuAsmOpts {
   // Cuda directory which would be searched first.
   std::string preferred_cuda_dir;
 
-  std::vector<std::string> extra_flags;
-
   explicit GpuAsmOpts(bool disable_gpuasm_optimizations = false,
-                      absl::string_view preferred_cuda_dir = "",
-                      absl::Span<const std::string> extra_flags = {})
+                      absl::string_view preferred_cuda_dir = "")
       : disable_gpuasm_optimizations(disable_gpuasm_optimizations),
-        preferred_cuda_dir(preferred_cuda_dir),
-        extra_flags(extra_flags.begin(), extra_flags.end()) {}
+        preferred_cuda_dir(preferred_cuda_dir) {}
 
-  using PtxOptionsTuple =
-      std::tuple<bool, std::string, std::vector<std::string>>;
+  using PtxOptionsTuple = std::tuple<bool, std::string>;
 
   PtxOptionsTuple ToTuple() {
-    return std::make_tuple(disable_gpuasm_optimizations, preferred_cuda_dir,
-                           extra_flags);
+    return std::make_tuple(disable_gpuasm_optimizations, preferred_cuda_dir);
   }
 };
 }  // namespace stream_executor

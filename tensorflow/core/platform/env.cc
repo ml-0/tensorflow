@@ -65,7 +65,7 @@ class FileSystemRegistryImpl : public FileSystemRegistry {
  private:
   mutable mutex mu_;
   mutable std::unordered_map<std::string, std::unique_ptr<FileSystem>> registry_
-      TF_GUARDED_BY(mu_);
+      GUARDED_BY(mu_);
 };
 
 Status FileSystemRegistryImpl::Register(const std::string& scheme,
@@ -400,7 +400,7 @@ bool Env::CreateUniqueFileName(string* prefix, const string& suffix) {
 #else
   int32 pid = static_cast<int32>(getpid());
 #endif
-  long long now_microsec = NowMicros();  // NOLINT
+  uint64 now_microsec = NowMicros();
 
   *prefix += strings::Printf("%s-%x-%d-%llx", port::Hostname().c_str(), tid,
                              pid, now_microsec);

@@ -1,6 +1,6 @@
 # Tensorflow default + linux implementations of tensorflow/core/platform libraries.
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
-load("//tensorflow:tensorflow.bzl", "if_not_windows", "tf_copts")
+load("//tensorflow:tensorflow.bzl", "tf_copts")
 load(
     "//tensorflow/core/platform:rules_cc.bzl",
     "cc_library",
@@ -193,15 +193,6 @@ cc_library(
     ],
 )
 
-filegroup(
-    name = "xla_cpu_runtime_srcs",
-    srcs = [
-        "cord.h",
-        "dynamic_annotations.h",
-        "integral_types.h",
-    ] + if_not_windows(["env_time.cc"]),
-)
-
 cc_library(
     name = "mutex",
     srcs = [
@@ -364,7 +355,6 @@ cc_library(
         "//tensorflow/core/platform",
         "//tensorflow/core/platform:stacktrace",
     ],
-    alwayslink = 1,
 )
 
 cc_library(

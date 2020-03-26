@@ -42,7 +42,8 @@ struct GraphImportConfig {
   InputArrays inputs;
   // name:index strings for the data outputs.
   std::vector<string> outputs;
-  // name strings for the control outputs.
+  // name strings for the control outputs. This is currently only used when
+  // `graph_as_function` is set.
   std::vector<string> control_outputs;
   // Setting prune_unused_nodes to true, would prune unreachable nodes if
   // output_arrays is specified.

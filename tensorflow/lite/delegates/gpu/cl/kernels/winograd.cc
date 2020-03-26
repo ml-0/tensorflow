@@ -26,7 +26,6 @@ limitations under the License.
 #include "tensorflow/lite/delegates/gpu/common/data_type.h"
 #include "tensorflow/lite/delegates/gpu/common/shape.h"
 #include "tensorflow/lite/delegates/gpu/common/status.h"
-#include "tensorflow/lite/delegates/gpu/common/winograd_util.h"
 
 namespace tflite {
 namespace gpu {
@@ -382,7 +381,7 @@ Winograd4x4To36& Winograd4x4To36::operator=(Winograd4x4To36&& operation) {
   return *this;
 }
 
-absl::Status Winograd4x4To36::Compile(const CreationContext& creation_context) {
+Status Winograd4x4To36::Compile(const CreationContext& creation_context) {
   std::vector<CompilerOptions> options;
   if (creation_context.device->IsAdreno()) {
     options.push_back(CompilerOptions::ADRENO_MORE_WAVES);
@@ -398,11 +397,11 @@ absl::Status Winograd4x4To36::Compile(const CreationContext& creation_context) {
       code, "main_function", options, *creation_context.context,
       *creation_context.device, &kernel_));
   work_group_size_ = SelectBestWorkGroup();
-  return absl::OkStatus();
+  return OkStatus();
 }
 
-absl::Status Winograd4x4To36::UploadBt(CLContext* context) {
-  tflite::gpu::Tensor<Linear, DataType::FLOAT32> bt_aligned;
+Status Winograd4x4To36::UploadBt(CLContext* context) {
+  ::tflite::gpu::Tensor<Linear, DataType::FLOAT32> bt_aligned;
   bt_aligned.shape = Linear(6 * 8);
   bt_aligned.data.resize(6 * 8);
   auto bt_mat = BtMatrixForWinograd4x4To6x6();
@@ -428,7 +427,7 @@ int3 Winograd4x4To36::SelectBestWorkGroup() {
   return GetFirstSuitableWorkGroup(wgs, kernel_.GetMaxWorkGroupSize());
 }
 
-absl::Status Winograd4x4To36::BindArguments() {
+Status Winograd4x4To36::BindArguments() {
   kernel_.ResetBindingCounter();
   RETURN_IF_ERROR(kernel_.SetMemoryAuto(src_[0]->GetMemoryPtr()));
   RETURN_IF_ERROR(kernel_.SetMemoryAuto(bt_.GetMemoryPtr()));
@@ -445,7 +444,8 @@ absl::Status Winograd4x4To36::BindArguments() {
       kernel_.SetBytesAuto(int2(-padding_.prepended.w, -padding_.prepended.h)));
   RETURN_IF_ERROR(kernel_.SetBytesAuto(tiles_total));
   RETURN_IF_ERROR(kernel_.SetBytesAuto(tiles_x));
-  return absl::OkStatus();
+
+  return OkStatus();
 }
 
 int3 Winograd4x4To36::GetGridSize() const {
@@ -455,7 +455,7 @@ int3 Winograd4x4To36::GetGridSize() const {
   return int3(grid_x, grid_y, grid_z);
 }
 
-absl::Status Winograd4x4To36::Tune(const TuningParameters& params) {
+Status Winograd4x4To36::Tune(const TuningParameters& params) {
   switch (params.tuning_type) {
     case TuningType::EXHAUSTIVE:
       RETURN_IF_ERROR(BindArguments());
@@ -464,19 +464,19 @@ absl::Status Winograd4x4To36::Tune(const TuningParameters& params) {
     case TuningType::FAST:
     default:
       work_group_size_ = SelectBestWorkGroup();
-      return absl::OkStatus();
+      return OkStatus();
   }
 }
 
-absl::Status Winograd4x4To36::AddToQueue(CLCommandQueue* queue) {
+Status Winograd4x4To36::AddToQueue(CLCommandQueue* queue) {
   RETURN_IF_ERROR(BindArguments());
   return queue->DispatchImplicit(kernel_, GetGridSize(), work_group_size_);
 }
 
-absl::Status CreateWinograd4x4To36(const CreationContext& creation_context,
-                                   const OperationDef& definition,
-                                   const Padding2D& padding,
-                                   Winograd4x4To36* result) {
+Status CreateWinograd4x4To36(const CreationContext& creation_context,
+                             const OperationDef& definition,
+                             const Padding2D& padding,
+                             Winograd4x4To36* result) {
   *result = Winograd4x4To36(definition, padding);
   return result->UploadBt(creation_context.context);
 }
@@ -499,7 +499,7 @@ Winograd36To4x4& Winograd36To4x4::operator=(Winograd36To4x4&& operation) {
   return *this;
 }
 
-absl::Status Winograd36To4x4::Compile(const CreationContext& creation_context) {
+Status Winograd36To4x4::Compile(const CreationContext& creation_context) {
   std::vector<CompilerOptions> options;
   if (definition_.precision == CalculationsPrecision::F16 &&
       creation_context.device->IsPowerVR()) {
@@ -511,11 +511,11 @@ absl::Status Winograd36To4x4::Compile(const CreationContext& creation_context) {
       code, "main_function", options, *creation_context.context,
       *creation_context.device, &kernel_));
   work_group_size_ = SelectBestWorkGroup();
-  return absl::OkStatus();
+  return OkStatus();
 }
 
-absl::Status Winograd36To4x4::UploadAt(CLContext* context) {
-  tflite::gpu::Tensor<Linear, DataType::FLOAT32> at_aligned;
+Status Winograd36To4x4::UploadAt(CLContext* context) {
+  ::tflite::gpu::Tensor<Linear, DataType::FLOAT32> at_aligned;
   at_aligned.shape = Linear(4 * 8);
   at_aligned.data.resize(4 * 8);
   auto at_mat = AtMatrixForWinograd4x4To6x6();
@@ -541,7 +541,7 @@ int3 Winograd36To4x4::SelectBestWorkGroup() {
   return GetFirstSuitableWorkGroup(wgs, kernel_.GetMaxWorkGroupSize());
 }
 
-absl::Status Winograd36To4x4::BindArguments() {
+Status Winograd36To4x4::BindArguments() {
   kernel_.ResetBindingCounter();
   RETURN_IF_ERROR(kernel_.SetMemoryAuto(src_[0]->GetMemoryPtr()));
   RETURN_IF_ERROR(kernel_.SetMemoryAuto(at_.GetMemoryPtr()));
@@ -552,7 +552,8 @@ absl::Status Winograd36To4x4::BindArguments() {
   RETURN_IF_ERROR(kernel_.SetBytesAuto(dst_[0]->GetWHSB()));
   const int tiles_x = IntegralDivideRoundUp(dst_[0]->Width(), 4);
   RETURN_IF_ERROR(kernel_.SetBytesAuto(tiles_x));
-  return absl::OkStatus();
+
+  return OkStatus();
 }
 
 int3 Winograd36To4x4::GetGridSize() const {
@@ -564,7 +565,7 @@ int3 Winograd36To4x4::GetGridSize() const {
   return int3(grid_x, grid_y, grid_z);
 }
 
-absl::Status Winograd36To4x4::Tune(const TuningParameters& params) {
+Status Winograd36To4x4::Tune(const TuningParameters& params) {
   switch (params.tuning_type) {
     case TuningType::EXHAUSTIVE:
       RETURN_IF_ERROR(BindArguments());
@@ -573,18 +574,18 @@ absl::Status Winograd36To4x4::Tune(const TuningParameters& params) {
     case TuningType::FAST:
     default:
       work_group_size_ = SelectBestWorkGroup();
-      return absl::OkStatus();
+      return OkStatus();
   }
 }
 
-absl::Status Winograd36To4x4::AddToQueue(CLCommandQueue* queue) {
+Status Winograd36To4x4::AddToQueue(CLCommandQueue* queue) {
   RETURN_IF_ERROR(BindArguments());
   return queue->DispatchImplicit(kernel_, GetGridSize(), work_group_size_);
 }
 
-absl::Status CreateWinograd36To4x4(
+Status CreateWinograd36To4x4(
     const CreationContext& creation_context, const OperationDef& definition,
-    const tflite::gpu::Tensor<Linear, DataType::FLOAT32>& biases,
+    const ::tflite::gpu::Tensor<Linear, DataType::FLOAT32>& biases,
     Winograd36To4x4* result) {
   *result = Winograd36To4x4(definition);
   LinearStorageCreateInfo create_info;
@@ -593,6 +594,7 @@ absl::Status CreateWinograd36To4x4(
   create_info.name = "biases";
   RETURN_IF_ERROR(CreateLinearStorage(
       create_info, biases, creation_context.context, &result->biases_));
+
   return result->UploadAt(creation_context.context);
 }
 

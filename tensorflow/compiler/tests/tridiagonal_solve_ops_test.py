@@ -225,7 +225,7 @@ class TridiagonalSolveOpsTest(xla_test.XLATestCase):
     with self.session() as sess, self.test_scope():
       with self.assertRaisesRegexp(
           errors_impl.UnimplementedError,
-          "Current implementation does not yet support pivoting."):
+          "Pivoting is not yet supported in XLA tridiagonal solver."):
         diags = array_ops.placeholder(
             shape=(batch_size, 3, num_dims), dtype=dtypes.float32)
         rhs = array_ops.placeholder(

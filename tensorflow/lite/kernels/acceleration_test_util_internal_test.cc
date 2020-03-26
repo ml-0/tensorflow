@@ -110,7 +110,7 @@ TEST_F(ReadAccelerationConfigTest, IgnoresCommentedLines) {
   EXPECT_TRUE(blacklist_.empty());
 }
 
-TEST_F(ReadAccelerationConfigTest, CommentCanHaveTrailingBlanks) {
+TEST_F(ReadAccelerationConfigTest, CommentCanHaveTralingBlanks) {
   ReadAccelerationConfig("  #key,value", consumer_);
 
   EXPECT_TRUE(whitelist_.empty());

@@ -41,15 +41,16 @@ inline void MatrixBatchVectorMultiplyAccumulate(
     const int8_t* __restrict__ matrix, const int m_rows, const int m_cols,
     const int8_t* __restrict__ vectors, const float* scaling_factors,
     int n_batch, int32_t* scratch, float* __restrict__ result,
-    CpuBackendContext* context) {
+    int result_stride, CpuBackendContext* context) {
 // TODO(b/148289189) Remove when Ruy GEMV is the default.
 #ifdef TFLITE_WITH_RUY_GEMV
   tensor_utils::MatrixBatchVectorMultiplyAccumulate(
       matrix, m_rows, m_cols, vectors, scaling_factors, n_batch, scratch,
-      result, context);
+      result, result_stride, context);
 #else
   tensor_utils::MatrixBatchVectorMultiplyAccumulate(
-      matrix, m_rows, m_cols, vectors, scaling_factors, n_batch, result);
+      matrix, m_rows, m_cols, vectors, scaling_factors, n_batch, result,
+      result_stride);
 #endif
 }
 
@@ -180,18 +181,18 @@ inline void LstmStepFloat(
     if (!use_cifg) {
       tensor_utils::MatrixBatchVectorMultiplyAccumulate(
           input_to_input_weights_ptr, n_cell, n_input, input_ptr, n_batch,
-          input_gate_scratch);
+          input_gate_scratch, /*result_stride=*/1);
     }
 
     tensor_utils::MatrixBatchVectorMultiplyAccumulate(
         input_to_forget_weights_ptr, n_cell, n_input, input_ptr, n_batch,
-        forget_gate_scratch);
+        forget_gate_scratch, /*result_stride=*/1);
     tensor_utils::MatrixBatchVectorMultiplyAccumulate(
         input_to_cell_weights_ptr, n_cell, n_input, input_ptr, n_batch,
-        cell_scratch);
+        cell_scratch, /*result_stride=*/1);
     tensor_utils::MatrixBatchVectorMultiplyAccumulate(
         input_to_output_weights_ptr, n_cell, n_input, input_ptr, n_batch,
-        output_gate_scratch);
+        output_gate_scratch, /*result_stride=*/1);
   }
 
   // For each batch and cell: compute aux_input_weight * aux_input.
@@ -201,35 +202,38 @@ inline void LstmStepFloat(
     if (!use_cifg) {
       tensor_utils::MatrixBatchVectorMultiplyAccumulate(
           aux_input_to_input_weights_ptr, n_cell, n_aux_input, aux_input_ptr,
-          n_batch, input_gate_scratch);
+          n_batch, input_gate_scratch,
+          /*result_stride=*/1);
     }
 
     tensor_utils::MatrixBatchVectorMultiplyAccumulate(
         aux_input_to_forget_weights_ptr, n_cell, n_aux_input, aux_input_ptr,
-        n_batch, forget_gate_scratch);
+        n_batch, forget_gate_scratch, /*result_stride=*/1);
     tensor_utils::MatrixBatchVectorMultiplyAccumulate(
         aux_input_to_cell_weights_ptr, n_cell, n_aux_input, aux_input_ptr,
-        n_batch, cell_scratch);
+        n_batch, cell_scratch, /*result_stride=*/1);
     tensor_utils::MatrixBatchVectorMultiplyAccumulate(
         aux_input_to_output_weights_ptr, n_cell, n_aux_input, aux_input_ptr,
-        n_batch, output_gate_scratch);
+        n_batch, output_gate_scratch, /*result_stride=*/1);
   }
 
   // For each batch and cell: compute recurrent_weight * output_state.
   if (!use_cifg) {
     tensor_utils::MatrixBatchVectorMultiplyAccumulate(
         recurrent_to_input_weights_ptr, n_cell, n_output, output_state_ptr,
-        n_batch, input_gate_scratch);
+        n_batch, input_gate_scratch, /*result_stride=*/1);
   }
   tensor_utils::MatrixBatchVectorMultiplyAccumulate(
       recurrent_to_forget_weights_ptr, n_cell, n_output, output_state_ptr,
-      n_batch, forget_gate_scratch);
+      n_batch, forget_gate_scratch,
+      /*result_stride=*/1);
   tensor_utils::MatrixBatchVectorMultiplyAccumulate(
       recurrent_to_cell_weights_ptr, n_cell, n_output, output_state_ptr,
-      n_batch, cell_scratch);
+      n_batch, cell_scratch, /*result_stride=*/1);
   tensor_utils::MatrixBatchVectorMultiplyAccumulate(
       recurrent_to_output_weights_ptr, n_cell, n_output, output_state_ptr,
-      n_batch, output_gate_scratch);
+      n_batch, output_gate_scratch,
+      /*result_stride=*/1);
 
   // For each batch and cell: update input gate.
   if (!use_cifg) {
@@ -340,7 +344,8 @@ inline void LstmStepFloat(
       tensor_utils::MatrixBatchVectorMultiplyAccumulate(
           projection_weights_ptr, n_output, n_cell,
           output_gate_scratch + b * n_cell,
-          /*n_batch=*/1, output_ptr + b * output_batch_leading_dim);
+          /*n_batch=*/1, output_ptr + b * output_batch_leading_dim,
+          /*result_stride=*/1);
       if (params->proj_clip > 0.0) {
         tensor_utils::ClipVector(output_ptr + b * output_batch_leading_dim,
                                  n_output, params->proj_clip,
@@ -518,20 +523,22 @@ inline void LstmStepHybrid(
         product_scaling_factors[b] =
             scaling_factors[b] * input_to_input_weights_scale;
       }
-      MatrixBatchVectorMultiplyAccumulate(
-          input_to_input_weights_ptr, n_cell, n_input, quantized_input_ptr,
-          product_scaling_factors, n_batch, accum_scratch_ptr,
-          input_gate_scratch, context);
+      MatrixBatchVectorMultiplyAccumulate(input_to_input_weights_ptr, n_cell,
+                                          n_input, quantized_input_ptr,
+                                          product_scaling_factors, n_batch,
+                                          accum_scratch_ptr, input_gate_scratch,
+                                          /*result_stride=*/1, context);
     }
 
     for (int b = 0; b < n_batch; ++b) {
       product_scaling_factors[b] =
           scaling_factors[b] * input_to_forget_weights_scale;
     }
-    MatrixBatchVectorMultiplyAccumulate(
-        input_to_forget_weights_ptr, n_cell, n_input, quantized_input_ptr,
-        product_scaling_factors, n_batch, accum_scratch_ptr,
-        forget_gate_scratch, context);
+    MatrixBatchVectorMultiplyAccumulate(input_to_forget_weights_ptr, n_cell,
+                                        n_input, quantized_input_ptr,
+                                        product_scaling_factors, n_batch,
+                                        accum_scratch_ptr, forget_gate_scratch,
+                                        /*result_stride=*/1, context);
 
     for (int b = 0; b < n_batch; ++b) {
       product_scaling_factors[b] =
@@ -540,16 +547,17 @@ inline void LstmStepHybrid(
     MatrixBatchVectorMultiplyAccumulate(
         input_to_cell_weights_ptr, n_cell, n_input, quantized_input_ptr,
         product_scaling_factors, n_batch, accum_scratch_ptr, cell_scratch,
-        context);
+        /*result_stride=*/1, context);
 
     for (int b = 0; b < n_batch; ++b) {
       product_scaling_factors[b] =
           scaling_factors[b] * input_to_output_weights_scale;
     }
-    MatrixBatchVectorMultiplyAccumulate(
-        input_to_output_weights_ptr, n_cell, n_input, quantized_input_ptr,
-        product_scaling_factors, n_batch, accum_scratch_ptr,
-        output_gate_scratch, context);
+    MatrixBatchVectorMultiplyAccumulate(input_to_output_weights_ptr, n_cell,
+                                        n_input, quantized_input_ptr,
+                                        product_scaling_factors, n_batch,
+                                        accum_scratch_ptr, output_gate_scratch,
+                                        /*result_stride=*/1, context);
   }
 
   // For each batch and cell: compute aux_input_weight * aux_input.
@@ -571,7 +579,7 @@ inline void LstmStepHybrid(
       MatrixBatchVectorMultiplyAccumulate(
           aux_input_to_input_weights_ptr, n_cell, n_aux_input,
           quantized_aux_input_ptr, product_scaling_factors, n_batch,
-          accum_scratch_ptr, input_gate_scratch, context);
+          accum_scratch_ptr, input_gate_scratch, /*result_stride=*/1, context);
     }
 
     for (int b = 0; b < n_batch; ++b) {
@@ -581,7 +589,7 @@ inline void LstmStepHybrid(
     MatrixBatchVectorMultiplyAccumulate(
         aux_input_to_forget_weights_ptr, n_cell, n_aux_input,
         quantized_aux_input_ptr, product_scaling_factors, n_batch,
-        accum_scratch_ptr, forget_gate_scratch, context);
+        accum_scratch_ptr, forget_gate_scratch, /*result_stride=*/1, context);
 
     for (int b = 0; b < n_batch; ++b) {
       product_scaling_factors[b] =
@@ -590,7 +598,7 @@ inline void LstmStepHybrid(
     MatrixBatchVectorMultiplyAccumulate(
         aux_input_to_cell_weights_ptr, n_cell, n_aux_input,
         quantized_aux_input_ptr, product_scaling_factors, n_batch,
-        accum_scratch_ptr, cell_scratch, context);
+        accum_scratch_ptr, cell_scratch, /*result_stride=*/1, context);
 
     for (int b = 0; b < n_batch; ++b) {
       product_scaling_factors[b] =
@@ -599,7 +607,7 @@ inline void LstmStepHybrid(
     MatrixBatchVectorMultiplyAccumulate(
         aux_input_to_output_weights_ptr, n_cell, n_aux_input,
         quantized_aux_input_ptr, product_scaling_factors, n_batch,
-        accum_scratch_ptr, output_gate_scratch, context);
+        accum_scratch_ptr, output_gate_scratch, /*result_stride=*/1, context);
   }
 
   if (!tensor_utils::IsZeroVector(output_state_ptr, n_batch * n_output)) {
@@ -621,7 +629,7 @@ inline void LstmStepHybrid(
       MatrixBatchVectorMultiplyAccumulate(
           recurrent_to_input_weights_ptr, n_cell, n_output,
           quantized_output_state_ptr, product_scaling_factors, n_batch,
-          accum_scratch_ptr, input_gate_scratch, context);
+          accum_scratch_ptr, input_gate_scratch, /*result_stride=*/1, context);
     }
 
     for (int b = 0; b < n_batch; ++b) {
@@ -631,7 +639,7 @@ inline void LstmStepHybrid(
     MatrixBatchVectorMultiplyAccumulate(
         recurrent_to_forget_weights_ptr, n_cell, n_output,
         quantized_output_state_ptr, product_scaling_factors, n_batch,
-        accum_scratch_ptr, forget_gate_scratch, context);
+        accum_scratch_ptr, forget_gate_scratch, /*result_stride=*/1, context);
 
     for (int b = 0; b < n_batch; ++b) {
       product_scaling_factors[b] =
@@ -640,7 +648,7 @@ inline void LstmStepHybrid(
     MatrixBatchVectorMultiplyAccumulate(
         recurrent_to_cell_weights_ptr, n_cell, n_output,
         quantized_output_state_ptr, product_scaling_factors, n_batch,
-        accum_scratch_ptr, cell_scratch, context);
+        accum_scratch_ptr, cell_scratch, /*result_stride=*/1, context);
 
     for (int b = 0; b < n_batch; ++b) {
       product_scaling_factors[b] =
@@ -649,7 +657,7 @@ inline void LstmStepHybrid(
     MatrixBatchVectorMultiplyAccumulate(
         recurrent_to_output_weights_ptr, n_cell, n_output,
         quantized_output_state_ptr, product_scaling_factors, n_batch,
-        accum_scratch_ptr, output_gate_scratch, context);
+        accum_scratch_ptr, output_gate_scratch, /*result_stride=*/1, context);
   }
 
   // For each batch and cell: update input gate.
@@ -785,7 +793,8 @@ inline void LstmStepHybrid(
             projection_weights_ptr, n_output, n_cell,
             quantized_cell_state_ptr + b * n_cell, &product_scaling_factors[b],
             /*n_batch=*/1, accum_scratch_ptr,
-            output_ptr + b * output_batch_leading_dim, context);
+            output_ptr + b * output_batch_leading_dim,
+            /*result_stride=*/1, context);
       }
     }
     if (params->proj_clip > 0.0) {
@@ -861,7 +870,7 @@ inline void LstmStepHybrid(
 //
 // Layer norm coefficients of size 'n_cell', representing diagonal matrices.
 //   layer_norm_input_weight_ptr    - optional
-//   layer_norm_forget_weight_ptr   - optional
+//   layer_norm_forput_weight_ptr   - optional
 //   layer_norm_cell_weight_ptr     - optional
 //   layer_norm_output_weight_ptr   - optional
 //
@@ -1187,7 +1196,7 @@ inline void LstmStepInteger(
 //
 // Layer norm coefficients of size 'n_cell', representing diagonal matrices.
 //   layer_norm_input_weight_ptr    - optional
-//   layer_norm_forget_weight_ptr   - optional
+//   layer_norm_forput_weight_ptr   - optional
 //   layer_norm_cell_weight_ptr     - optional
 //   layer_norm_output_weight_ptr   - optional
 //

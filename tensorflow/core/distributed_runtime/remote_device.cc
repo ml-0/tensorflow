@@ -15,8 +15,6 @@ limitations under the License.
 
 #include "tensorflow/core/distributed_runtime/remote_device.h"
 
-#include <stdlib.h>
-
 #include <vector>
 
 #include "tensorflow/core/common_runtime/device.h"
@@ -126,18 +124,7 @@ void NewRemoteDevices(Env* env, WorkerCacheInterface* worker_cache,
               worker_name_parsed.task, device_name_parsed.type,
               device_name_parsed.id));
           auto d = new RemoteDevice(env, da_rewritten);
-
-          // Experimental: Skipping over adding any TPU-type devices that aren't
-          // on the job called "worker" (but still adds the CPUs of other jobs).
-          if (getenv("TPU_NO_POPULATE_DEVICE_LIST_FROM_CLUSTER_SPEC") !=
-              nullptr) {
-            if (worker_name_parsed.job != "worker" ||
-                device_name_parsed.type.find("TPU") != std::string::npos) {
-              remote_devices.push_back(d);
-            }
-          } else {
-            remote_devices.push_back(d);
-          }
+          remote_devices.push_back(d);
         }
       }
     }

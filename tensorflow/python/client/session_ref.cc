@@ -53,8 +53,7 @@ struct RunCounter {
 };
 
 std::string SessionToHandle(Session* session) {
-  return strings::Printf("%llu", static_cast<unsigned long long>(
-                                     reinterpret_cast<uintptr_t>(session)));
+  return strings::Printf("%llu", reinterpret_cast<uint64>(session));
 }
 
 // The Session interface has many methods of the form:

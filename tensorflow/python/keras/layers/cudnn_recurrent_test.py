@@ -27,7 +27,6 @@ import numpy as np
 from tensorflow.python import keras
 from tensorflow.python.framework import ops
 from tensorflow.python.framework import test_util
-from tensorflow.python.keras import combinations
 from tensorflow.python.keras import keras_parameterized
 from tensorflow.python.keras import testing_utils
 from tensorflow.python.keras.optimizer_v2.rmsprop import RMSprop
@@ -245,7 +244,7 @@ class CuDNNGraphOnlyTest(keras_parameterized.TestCase):
       self.assertNotEqual(out4.max(), out5.max())
 
 
-@combinations.generate(combinations.combine(mode=['graph', 'eager']))
+@test_util.run_all_in_graph_and_eager_modes
 class CuDNNV1OnlyTest(keras_parameterized.TestCase):
 
   @test_util.run_gpu_only

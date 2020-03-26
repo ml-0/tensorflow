@@ -24,14 +24,9 @@ cc_library(
     srcs = [
         "modular_filesystem.cc",
         "modular_filesystem_registration.cc",
-    ],
-    hdrs = [
-        "modular_filesystem.h",
         "modular_filesystem_registration.h",
     ],
-    # TODO(mihaimaruseac): Visibility should be more restrictive once we
-    # convert to modular filesystems everywhere
-    visibility = ["//visibility:public"],
+    hdrs = ["modular_filesystem.h"],
     deps = [
         ":filesystem_interface",
         "//tensorflow/c:tf_status_helper",

@@ -19,7 +19,6 @@ limitations under the License.
 #include "tensorflow/core/platform/logging.h"
 #include "tensorflow/lite/c/common.h"
 #include "tensorflow/lite/tools/command_line_flags.h"
-#include "tensorflow/lite/tools/evaluation/evaluation_delegate_provider.h"
 #include "tensorflow/lite/tools/evaluation/proto/evaluation_config.pb.h"
 #include "tensorflow/lite/tools/evaluation/proto/evaluation_stages.pb.h"
 #include "tensorflow/lite/tools/evaluation/stages/inference_profiler_stage.h"
@@ -32,6 +31,9 @@ constexpr char kOutputFilePathFlag[] = "output_file_path";
 constexpr char kNumRunsFlag[] = "num_runs";
 constexpr char kInterpreterThreadsFlag[] = "num_interpreter_threads";
 constexpr char kDelegateFlag[] = "delegate";
+constexpr char kNnapiDelegate[] = "nnapi";
+constexpr char kGpuDelegate[] = "gpu";
+constexpr char kHexagonDelegate[] = "hexagon";
 
 bool EvaluateModel(const std::string& model_file_path,
                    const std::string& delegate, int num_runs,
@@ -47,11 +49,14 @@ bool EvaluateModel(const std::string& model_file_path,
   // This ensures that latency measurement isn't hampered by the time spent in
   // generating random data.
   inference_params->set_invocations_per_run(3);
-  inference_params->set_delegate(ParseStringToDelegateType(delegate));
-  if (!delegate.empty() &&
-      inference_params->delegate() == TfliteInferenceParams::NONE) {
-    LOG(WARNING) << "Unsupported TFLite delegate: " << delegate;
-    return false;
+  if (delegate == kNnapiDelegate) {
+    inference_params->set_delegate(TfliteInferenceParams::NNAPI);
+  }
+  if (delegate == kGpuDelegate) {
+    inference_params->set_delegate(TfliteInferenceParams::GPU);
+  }
+  if (delegate == kHexagonDelegate) {
+    inference_params->set_delegate(TfliteInferenceParams::HEXAGON);
   }
   InferenceProfilerStage eval(eval_config);
   if (eval.Init() != kTfLiteOk) return false;
@@ -97,10 +102,9 @@ int Main(int argc, char* argv[]) {
   if (!EvaluateModel(model_file_path, delegate, num_runs, output_file_path,
                      num_interpreter_threads)) {
     LOG(ERROR) << "Could not evaluate model!";
-    return EXIT_FAILURE;
   }
 
-  return EXIT_SUCCESS;
+  return 0;
 }
 
 }  // namespace evaluation

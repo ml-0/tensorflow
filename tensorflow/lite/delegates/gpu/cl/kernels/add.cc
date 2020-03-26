@@ -40,7 +40,7 @@ std::string Add::GetElementWiseCode(
   c += "__kernel void main_function(\n";
   c += src_tensor.GetDeclaration(AccessType::READ);
   c += GetArgsDeclaration();
-  c += cl::GetArgsDeclaration(linked_operations);
+  c += ::tflite::gpu::cl::GetArgsDeclaration(linked_operations);
   c += dst_tensor.GetDeclaration(AccessType::WRITE) + ",\n";
   c += "    int4 src_size,\n";
   c += "    int4 dst_size\n";
@@ -143,17 +143,17 @@ std::string Add::GetArgsDeclaration() const {
   return args;
 }
 
-absl::Status Add::BindArguments(CLKernel* kernel) {
+Status Add::BindArguments(CLKernel* kernel) {
   for (int i = 1; i < src_depthes_.size(); ++i) {
     RETURN_IF_ERROR(kernel->SetMemoryAuto(src_[i]->GetMemoryPtr()));
   }
   for (int i = 1; i < src_depthes_.size(); ++i) {
     RETURN_IF_ERROR(kernel->SetBytesAuto(src_[i]->GetWBatchedHSB()));
   }
-  return absl::OkStatus();
+  return OkStatus();
 }
 
-absl::Status Add::Compile(const CreationContext& creation_context) {
+Status Add::Compile(const CreationContext& creation_context) {
   const auto code = GetElementWiseCode(definition_, linked_operations_);
   return creation_context.cache->GetOrCreateCLKernel(
       code, "main_function", *creation_context.context,

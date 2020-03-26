@@ -74,6 +74,7 @@ android_binary(
     ],
     assets_dir = "",
     custom_package = "org.tensorflow.demo",
+    inline_constants = 1,
     manifest = "AndroidManifest.xml",
     resource_files = glob(["res/**"]),
     tags = [

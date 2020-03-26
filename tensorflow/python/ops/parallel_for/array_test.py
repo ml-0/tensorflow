@@ -36,14 +36,15 @@ from tensorflow.python.platform import test
 class ArrayTest(PForTestCase):
 
   def test_gather(self):
-    x = random_ops.random_uniform([3, 3, 3, 3])
+    x = random_ops.random_uniform([3, 3, 3])
     x2 = array_ops.placeholder_with_default(x, shape=None)  # Has dynamic shape.
 
     def loop_fn(i):
       outputs = []
       x_i = array_ops.gather(x, i)
       for y in [x, x2, x_i]:
-        for axis in [0, 2, -1]:
+        axes = [0] if y is x_i else [0, 2, -1]
+        for axis in axes:
           outputs.append(array_ops.gather(y, 2, axis=axis))
           outputs.append(
               array_ops.gather(y, math_ops.cast(2, dtypes.int64), axis=axis))
@@ -54,12 +55,6 @@ class ArrayTest(PForTestCase):
           outputs.append(array_ops.gather(y, [i], axis=axis))
           outputs.append(array_ops.gather(y, [i, 2], axis=axis))
           outputs.append(array_ops.gather(y, [[2, i], [i, 1]], axis=axis))
-
-        outputs.append(array_ops.gather(y, [0, 1, 2], axis=1, batch_dims=1))
-        outputs.append(array_ops.gather(y, [i, 1, 2], axis=2, batch_dims=1))
-        outputs.append(array_ops.gather(y, [[2, i], [i, 1], [2, 1]],
-                                        axis=-1, batch_dims=1))
-
       return outputs
 
     self._test_loop_fn(loop_fn, 3)
@@ -292,17 +287,6 @@ class ArrayTest(PForTestCase):
 
     self._test_loop_fn(loop_fn, 3)
 
-  def test_conjugate_transpose(self):
-    x = math_ops.complex(
-        random_ops.random_uniform([3, 2, 3, 4]),
-        random_ops.random_uniform([3, 2, 3, 4]))
-
-    def loop_fn(i):
-      x_i = array_ops.gather(x, i)
-      return array_ops.conjugate_transpose(x_i, [2, 1, 0])
-
-    self._test_loop_fn(loop_fn, 3)
-
   def test_zeros_like(self):
     x = random_ops.random_uniform([3, 2, 3])
 
@@ -486,16 +470,6 @@ class ArrayTest(PForTestCase):
       return array_ops.space_to_batch_nd(x1, block_shapes, paddings)
 
     self._test_loop_fn(loop_fn, 7)
-
-  def test_check_numerics(self):
-    x = random_ops.random_uniform([2, 3, 4])
-
-    def loop_fn(i):
-      x_i = array_ops.gather(x, i)
-      return array_ops.check_numerics(x_i, "test_message")
-
-    self._test_loop_fn(loop_fn, 2)
-
 
 if __name__ == "__main__":
   test.main()

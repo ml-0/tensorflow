@@ -36,8 +36,7 @@ Status CollectDataToResponse(const ProfileRequest& req,
                              ProfileResponse* response) {
   profiler::XSpace xspace;
   TF_RETURN_IF_ERROR(profiler->CollectData(&xspace));
-  TF_RETURN_IF_ERROR(
-      profiler::ConvertXSpaceToProfileResponse(xspace, req, response));
+  profiler::ConvertXSpaceToProfileResponse(xspace, req, response);
   return Status::OK();
 }
 

@@ -231,15 +231,9 @@ class ReturnStatementsTransformer(converter.Base):
 
     retval = node.value if node.value else parser.parse_expression('None')
 
-    # Note: If `return <expr> raises, then the return is aborted.
-    # The try-catch below ensures the variables remain consistent in that case.
     template = """
-      try:
-        do_return_var_name = True
-        retval_var_name = retval
-      except:
-        do_return_var_name = False
-        raise
+      do_return_var_name = True
+      retval_var_name = retval
     """
     node = templates.replace(
         template,

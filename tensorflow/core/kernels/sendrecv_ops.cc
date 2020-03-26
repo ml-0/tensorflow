@@ -115,8 +115,14 @@ string SendOp::TraceString(OpKernelContext* ctx, bool verbose) {
   auto dst_it = attr.find("_dst");
   const string& src = src_it != attr.end() ? src_it->second.s() : "";
   const string& dst = dst_it != attr.end() ? dst_it->second.s() : "";
-  return strings::StrCat(name_view(), ":", type_string_view(), "#from=", src,
-                         ",to=", dst, "#");
+  if (!verbose) {
+    return strings::StrCat(name_view(), ":", type_string_view(), "#from=", src,
+                           ",to=", dst, "#");
+  } else {
+    string trace_args = GetTraceArgument(ctx);
+    return strings::StrCat(name_view(), ":", type_string_view(), "#from=", src,
+                           ",to=", dst, ",", trace_args, "#");
+  }
 }
 
 REGISTER_KERNEL_BUILDER(Name("_Send").Device(DEVICE_CPU), SendOp);
@@ -157,8 +163,14 @@ string RecvOp::TraceString(OpKernelContext* ctx, bool verbose) {
   auto dst_it = attr.find("_dst");
   const string& src = src_it != attr.end() ? src_it->second.s() : "";
   const string& dst = dst_it != attr.end() ? dst_it->second.s() : "";
-  return strings::StrCat(name_view(), ":", type_string_view(), "#from=", src,
-                         ",to=", dst, "#");
+  if (!verbose) {
+    return strings::StrCat(name_view(), ":", type_string_view(), "#from=", src,
+                           ",to=", dst, "#");
+  } else {
+    string trace_args = GetTraceArgument(ctx);
+    return strings::StrCat(name_view(), ":", type_string_view(), "#from=", src,
+                           ",to=", dst, ",", trace_args, "#");
+  }
 }
 
 namespace {

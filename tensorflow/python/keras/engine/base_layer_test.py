@@ -25,24 +25,19 @@ import traceback
 
 import numpy as np
 
+from tensorflow.python import keras
 from tensorflow.python.eager import context
 from tensorflow.python.eager import def_function
 from tensorflow.python.framework import constant_op
 from tensorflow.python.framework import dtypes
-from tensorflow.python.framework import errors_impl
 from tensorflow.python.framework import ops
 from tensorflow.python.framework import sparse_tensor
 from tensorflow.python.framework import tensor_spec
+from tensorflow.python.framework import test_util
 from tensorflow.python.keras import backend
-from tensorflow.python.keras import combinations
 from tensorflow.python.keras import keras_parameterized
-from tensorflow.python.keras import layers
-from tensorflow.python.keras import regularizers
 from tensorflow.python.keras import testing_utils
 from tensorflow.python.keras.engine import base_layer
-from tensorflow.python.keras.engine import input_layer
-from tensorflow.python.keras.engine import sequential
-from tensorflow.python.keras.engine import training as training_lib
 from tensorflow.python.keras.mixed_precision.experimental import policy
 from tensorflow.python.keras.optimizer_v2 import rmsprop
 from tensorflow.python.keras.utils import tf_utils
@@ -86,7 +81,7 @@ class InvalidLayer(base_layer.Layer):
 
 class BaseLayerTest(keras_parameterized.TestCase):
 
-  @combinations.generate(combinations.keras_model_type_combinations())
+  @keras_parameterized.run_with_all_model_types
   def test_dynamic_layer(self):
     model = testing_utils.get_model_from_layers([DynamicLayer(dynamic=True)],
                                                 input_shape=(3,))
@@ -95,7 +90,7 @@ class BaseLayerTest(keras_parameterized.TestCase):
     self.assertEqual(model.run_eagerly, True)
     model.train_on_batch(np.random.random((2, 3)), np.random.random((2, 3)))
 
-  @combinations.generate(combinations.keras_model_type_combinations())
+  @keras_parameterized.run_with_all_model_types
   def test_dynamic_layer_error(self):
     with self.assertRaisesRegexp(TypeError,
                                  'attempting to use Python control flow'):
@@ -104,7 +99,7 @@ class BaseLayerTest(keras_parameterized.TestCase):
       model.compile(rmsprop.RMSprop(0.001), loss='mse')
       model.train_on_batch(np.random.random((2, 3)), np.random.random((2, 3)))
 
-  @combinations.generate(combinations.keras_model_type_combinations())
+  @keras_parameterized.run_with_all_model_types
   def test_dynamic_layer_error_running_in_graph_mode(self):
     with ops.get_default_graph().as_default():
       model = testing_utils.get_model_from_layers([DynamicLayer(dynamic=True)],
@@ -116,8 +111,7 @@ class BaseLayerTest(keras_parameterized.TestCase):
         model.compile(rmsprop.RMSprop(0.001), loss='mse')
 
   def test_manual_compute_output_shape(self):
-
-    class BuildCounter(base_layer.Layer):
+    class BuildCounter(keras.layers.Layer):
 
       def __init__(self, *args, **kwargs):  # pylint: disable=redefined-outer-name
         super(BuildCounter, self).__init__(*args, **kwargs)
@@ -129,41 +123,45 @@ class BaseLayerTest(keras_parameterized.TestCase):
       def call(self, inputs):
         return inputs
 
-    layer = BuildCounter(dtype=dtypes.float64)
-    output_shape = layer.compute_output_shape((None, 10))
-    self.assertEqual(layer.build_counter, 1)
-    self.assertEqual(output_shape.as_list(), [None, 10])
-    output_signature = layer.compute_output_signature(
-        tensor_spec.TensorSpec(dtype=dtypes.float64, shape=[None, 10]))
-    self.assertEqual(layer.build_counter, 1)
-    self.assertEqual(output_signature.dtype, dtypes.float64)
-    self.assertEqual(output_signature.shape.as_list(), [None, 10])
-    layer(np.ones((5, 10)))
-    self.assertEqual(layer.build_counter, 1)
+    with context.eager_mode():
+      layer = BuildCounter(dtype=dtypes.float64)
+      output_shape = layer.compute_output_shape((None, 10))
+      self.assertEqual(layer.build_counter, 1)
+      self.assertEqual(output_shape.as_list(), [None, 10])
+      output_signature = layer.compute_output_signature(
+          tensor_spec.TensorSpec(dtype=dtypes.float64, shape=[None, 10]))
+      self.assertEqual(layer.build_counter, 1)
+      self.assertEqual(output_signature.dtype, dtypes.float64)
+      self.assertEqual(output_signature.shape.as_list(), [None, 10])
+      layer(np.ones((5, 10)))
+      self.assertEqual(layer.build_counter, 1)
 
   def test_eager_switch_case_input(self):
-    task = input_layer.Input(shape=(), dtype=dtypes.int32)
-    control_flow_ops.switch_case(
-        task[0], [lambda: constant_op.constant(1.0) for _ in range(10)])
+    with context.eager_mode():
+      task = keras.Input(shape=(), dtype=dtypes.int32)
+      control_flow_ops.switch_case(
+          task[0], [lambda: constant_op.constant(1.0) for _ in range(10)])
 
   def test_dynamic_layer_with_deferred_sequential_model(self):
-    model = sequential.Sequential([DynamicLayer(dynamic=True), layers.Dense(3)])
+    model = keras.Sequential(
+        [DynamicLayer(dynamic=True),
+         keras.layers.Dense(3)])
     self.assertEqual(model.dynamic, True)
     model.compile(rmsprop.RMSprop(0.001), loss='mse')
     self.assertEqual(model.run_eagerly, True)
     model.train_on_batch(np.random.random((2, 3)), np.random.random((2, 3)))
 
   def test_nested_dynamic_layers_in_eager_mode(self):
-    inputs = input_layer.Input((3,))
+    inputs = keras.Input((3,))
     outputs = DynamicLayer(dynamic=True)(inputs)
-    inner_model = training_lib.Model(inputs, outputs)
+    inner_model = keras.Model(inputs, outputs)
     self.assertEqual(inner_model.dynamic, True)
 
-    inputs = input_layer.Input((3,))
+    inputs = keras.Input((3,))
     x = DynamicLayer(dynamic=True)(inputs)
     outputs = inner_model(x)
 
-    model = training_lib.Model(inputs, outputs)
+    model = keras.Model(inputs, outputs)
     self.assertEqual(model.dynamic, True)
     model.compile(rmsprop.RMSprop(0.001), loss='mse')
     self.assertEqual(model.run_eagerly, True)
@@ -171,12 +169,12 @@ class BaseLayerTest(keras_parameterized.TestCase):
 
   def test_dynamic_subclassed_model_no_shape_inference(self):
 
-    class MyModel(training_lib.Model):
+    class MyModel(keras.Model):
 
       def __init__(self):
         super(MyModel, self).__init__(dynamic=True)
-        self.layer1 = layers.Dense(3)
-        self.layer2 = layers.Dense(3)
+        self.layer1 = keras.layers.Dense(3)
+        self.layer2 = keras.layers.Dense(3)
 
       def call(self, inputs):
         if math_ops.reduce_sum(inputs) > 0:
@@ -193,12 +191,12 @@ class BaseLayerTest(keras_parameterized.TestCase):
 
   def test_dynamic_subclassed_model_with_shape_inference(self):
 
-    class MyModel(training_lib.Model):
+    class MyModel(keras.Model):
 
       def __init__(self):
         super(MyModel, self).__init__(dynamic=True)
-        self.layer1 = layers.Dense(3)
-        self.layer2 = layers.Dense(3)
+        self.layer1 = keras.layers.Dense(3)
+        self.layer2 = keras.layers.Dense(3)
 
       def call(self, inputs):
         if math_ops.reduce_sum(inputs) > 0:
@@ -218,72 +216,74 @@ class BaseLayerTest(keras_parameterized.TestCase):
     self.assertEqual(outputs.shape.as_list(), [2, 3])
 
   def test_deepcopy(self):
-    bias_reg = lambda x: 1e-3 * math_ops.reduce_sum(x)
-    layer = layers.Conv2D(32, (3, 3), bias_regularizer=bias_reg)
-    # Call the Layer on data to generate regularize losses.
-    layer(array_ops.ones((1, 10, 10, 3)))
-    self.assertLen(layer.losses, 1)
-    new_layer = copy.deepcopy(layer)
-    self.assertEqual(new_layer.bias_regularizer, bias_reg)
-    self.assertEqual(layer.get_config(), new_layer.get_config())
+    with context.eager_mode():
+      bias_reg = lambda x: 1e-3 * math_ops.reduce_sum(x)
+      layer = keras.layers.Conv2D(32, (3, 3), bias_regularizer=bias_reg)
+      # Call the Layer on data to generate regularize losses.
+      layer(array_ops.ones((1, 10, 10, 3)))
+      self.assertLen(layer.losses, 1)
+      new_layer = copy.deepcopy(layer)
+      self.assertEqual(new_layer.bias_regularizer, bias_reg)
+      self.assertEqual(layer.get_config(), new_layer.get_config())
 
-  @combinations.generate(combinations.combine(mode=['graph', 'eager']))
+  @test_util.run_in_graph_and_eager_modes
   def test_invalid_forward_pass(self):
-    inputs = input_layer.Input((3,))
+    inputs = keras.Input((3,))
     with self.assertRaisesRegexp(ValueError, 'You did something wrong!'):
       _ = InvalidLayer()(inputs)
 
   def test_no_legacy_model(self):
-    inputs = input_layer.Input((1,))
+    inputs = keras.Input((1,))
     legacy_dense_0 = legacy_core.Dense(1, name='legacy_dense_0')
     legacy_dense_1 = legacy_core.Dense(1, name='legacy_dense_1')
 
     layer = legacy_dense_0(inputs)
-    layer = layers.Dense(1)(layer)
+    layer = keras.layers.Dense(1)(layer)
     layer = legacy_dense_1(layer)
 
     expected_regex = (r'The following are legacy tf\.layers\.Layers:\n  '
                       '{}\n  {}'.format(legacy_dense_0, legacy_dense_1))
 
     with self.assertRaisesRegexp(TypeError, expected_regex):
-      _ = training_lib.Model(inputs=[inputs], outputs=[layer])
+      _ = keras.models.Model(inputs=[inputs], outputs=[layer])
 
-    model = training_lib.Model(inputs=[inputs], outputs=[inputs])
+    model = keras.models.Model(inputs=[inputs], outputs=[inputs])
     with self.assertRaisesRegexp(TypeError, expected_regex):
       model._insert_layers([legacy_dense_0, legacy_dense_1])
 
   def test_no_legacy_sequential(self):
-    layer = [layers.Dense(1), legacy_core.Dense(1, name='legacy_dense_0')]
+    layers = [
+        keras.layers.Dense(1),
+        legacy_core.Dense(1, name='legacy_dense_0')
+    ]
 
-    expected_regex = r'legacy tf\.layers\.Layers:\n  {}'.format(layer[1])
+    expected_regex = r'legacy tf\.layers\.Layers:\n  {}'.format(layers[1])
     with self.assertRaisesRegexp(TypeError, expected_regex):
-      _ = sequential.Sequential(layer)
+      _ = keras.models.Sequential(layers)
 
     with self.assertRaisesRegexp(TypeError, expected_regex):
-      _ = sequential.Sequential([input_layer.Input(shape=(4,))] + layer)
+      _ = keras.models.Sequential([keras.layers.Input(shape=(4,))] + layers)
 
-    model = sequential.Sequential()
+    model = keras.models.Sequential()
     with self.assertRaisesRegexp(TypeError, expected_regex):
-      for l in layer:
+      for l in layers:
         model.add(l)
 
-  @combinations.generate(
-      combinations.times(
-          combinations.keras_model_type_combinations(),
-          combinations.combine(mode=['graph', 'eager'])))
+  @keras_parameterized.run_with_all_model_types
+  @test_util.run_in_graph_and_eager_modes
   def test_build_with_numpy_data(self):
     model_layers = [
-        layers.Dense(3, activation='relu', kernel_initializer='ones'),
-        layers.Dense(1, activation='sigmoid', kernel_initializer='ones')
+        keras.layers.Dense(3, activation='relu', kernel_initializer='ones'),
+        keras.layers.Dense(1, activation='sigmoid', kernel_initializer='ones')
     ]
     model = testing_utils.get_model_from_layers(model_layers, input_shape=(4,))
     model(np.zeros((2, 4), dtype='float32'))
     self.assertTrue(model.built)
 
-  @combinations.generate(combinations.combine(mode=['graph', 'eager']))
+  @test_util.run_in_graph_and_eager_modes
   def test_default_add_weight(self):
 
-    class TestLayer(base_layer.Layer):
+    class TestLayer(keras.layers.Layer):
 
       def __init__(self):
         super(TestLayer, self).__init__()
@@ -300,77 +300,76 @@ class BaseLayerTest(keras_parameterized.TestCase):
     self.assertEqual(len(layer.losses), 1)
     if not context.executing_eagerly():
       # Cannot access tensor.name in eager execution.
-      self.assertIn('Variable_2/Regularizer', layer.losses[0].name)
+      self.assertTrue('Variable_2/Regularizer' in layer.losses[0].name)
 
-  @combinations.generate(combinations.keras_mode_combinations(mode=['eager']))
+  @keras_parameterized.run_all_keras_modes(always_skip_v1=True)
   def test_learning_phase_freezing_for_layers(self):
-
-    class LearningPhaseLayer(base_layer.Layer):
+    class LearningPhaseLayer(keras.layers.Layer):
 
       def call(self, inputs):
-        return backend.in_train_phase(lambda: array_ops.ones_like(inputs),
-                                      lambda: array_ops.zeros_like(inputs))
+        return keras.backend.in_train_phase(
+            lambda: array_ops.ones_like(inputs),
+            lambda: array_ops.zeros_like(inputs))
 
     def get_learning_phase_value():
-      model = sequential.Sequential([LearningPhaseLayer(input_shape=(1,))])
+      model = keras.models.Sequential([LearningPhaseLayer(input_shape=(1,))])
       model._run_eagerly = testing_utils.should_run_eagerly()
       return np.sum(model(np.ones((1, 1))))
 
     self.assertEqual(get_learning_phase_value(), 0)
 
     # Test scope.
-    with backend.learning_phase_scope(1):
+    with keras.backend.learning_phase_scope(1):
       self.assertEqual(get_learning_phase_value(), 1)
 
     # The effects of the scope end after exiting it.
     self.assertEqual(get_learning_phase_value(), 0)
 
     # Test setting.
-    backend.set_learning_phase(1)
+    keras.backend.set_learning_phase(1)
     self.assertEqual(get_learning_phase_value(), 1)
-    backend.set_learning_phase(0)
+    keras.backend.set_learning_phase(0)
     self.assertEqual(get_learning_phase_value(), 0)
 
   # Cannot be enabled with `run_eagerly=True`, see b/123904578
-  @combinations.generate(combinations.combine(mode=['graph', 'eager']))
+  @test_util.run_all_in_graph_and_eager_modes
   def test_layer_can_return_variable(self):
 
-    class ComputeSum(base_layer.Layer):
+    class ComputeSum(keras.layers.Layer):
 
       def __init__(self):
         super(ComputeSum, self).__init__()
         self.total = variables.Variable(
             initial_value=array_ops.zeros((1, 1)), trainable=False)
         if not context.executing_eagerly():
-          backend.get_session().run(self.total.initializer)
+          keras.backend.get_session().run(self.total.initializer)
 
       def call(self, inputs):
         self.total.assign_add(inputs)
         return self.total
 
-    inputs = input_layer.Input(shape=(1,))
-    model = training_lib.Model(inputs, ComputeSum()(inputs))
+    inputs = keras.Input(shape=(1,))
+    model = keras.Model(inputs, ComputeSum()(inputs))
     model.predict(np.ones((1, 1)))
 
   def _get_layer_with_training_arg(self):
 
-    class TrainingLayer(base_layer.Layer):
+    class TrainingLayer(keras.layers.Layer):
       """A layer with a `training` argument in a defuned `call`."""
 
       @def_function.function
       def call(self, inputs, training=None):
         if training is None:
-          training = backend.learning_phase()
+          training = keras.backend.learning_phase()
         return tf_utils.smart_cond(training,
                                    lambda: array_ops.ones_like(inputs),
                                    lambda: array_ops.zeros_like(inputs))
 
     return TrainingLayer()
 
+  @keras_parameterized.run_with_all_model_types
   # b/124459427: can't test with `run_eagerly=True` for now.
-  @combinations.generate(
-      combinations.times(combinations.keras_mode_combinations(),
-                         combinations.keras_model_type_combinations()))
+  @test_util.run_in_graph_and_eager_modes
   def test_training_arg_in_defun(self):
     layer = self._get_layer_with_training_arg()
     model = testing_utils.get_model_from_layers([layer], input_shape=(1,))
@@ -384,21 +383,20 @@ class BaseLayerTest(keras_parameterized.TestCase):
     # Test that the argument injection performed in `call` is not active
     # when the argument is passed explicitly.
     layer = self._get_layer_with_training_arg()
-    inputs = input_layer.Input(shape=(1,))
+    inputs = keras.Input(shape=(1,))
     # Pass `training` by name
     outputs = layer(inputs, training=False)
-    model = training_lib.Model(inputs, outputs)
+    model = keras.Model(inputs, outputs)
     model.compile(rmsprop.RMSprop(0.),
                   loss='mae')
     history = model.fit(np.zeros((1, 1)), np.zeros((1, 1)))
     self.assertEqual(history.history['loss'][0], 0.)
 
-  @combinations.generate(
-      combinations.times(combinations.keras_mode_combinations(),
-                         combinations.keras_model_type_combinations()))
+  @keras_parameterized.run_with_all_model_types
+  @keras_parameterized.run_all_keras_modes
   def test_raw_variable_assignment(self):
 
-    class RawVariableLayer(base_layer.Layer):
+    class RawVariableLayer(keras.layers.Layer):
 
       def __init__(self, **kwargs):
         super(RawVariableLayer, self).__init__(**kwargs)
@@ -418,15 +416,15 @@ class BaseLayerTest(keras_parameterized.TestCase):
     # Checks that variables get initialized.
     model.fit(x, y, batch_size=2, epochs=2)
 
-  @combinations.generate(combinations.combine(mode=['graph', 'eager']))
+  @test_util.run_in_graph_and_eager_modes
   def test_layer_names(self):
-    inputs = input_layer.Input(shape=[2])
+    inputs = keras.layers.Input(shape=[2])
     add1 = inputs + inputs
-    add2 = layers.Add()([inputs, inputs])
+    add2 = keras.layers.Add()([inputs, inputs])
     add3 = inputs + inputs
-    add4 = layers.Add()([inputs, inputs])
-    model = training_lib.Model(inputs=[inputs],
-                               outputs=[add1, add2, add3, add4])
+    add4 = keras.layers.Add()([inputs, inputs])
+    model = keras.models.Model(
+        inputs=[inputs], outputs=[add1, add2, add3, add4])
     actual_names = [l.name for l in model.layers]
     graph_names = [
         'input_1', 'tf_op_layer_AddV2', 'add', 'tf_op_layer_AddV2_1', 'add_1'
@@ -439,7 +437,7 @@ class BaseLayerTest(keras_parameterized.TestCase):
 
   def test_add_trainable_weight_on_frozen_layer(self):
 
-    class TestLayer(base_layer.Layer):
+    class TestLayer(keras.layers.Layer):
 
       def build(self, input_shape):
         self.w = self.add_weight(shape=(), trainable=True)
@@ -453,12 +451,12 @@ class BaseLayerTest(keras_parameterized.TestCase):
     layer.trainable = True
     self.assertListEqual(layer.trainable_weights, [layer.w])
 
-  @combinations.generate(
-      combinations.times(combinations.keras_mode_combinations(),
-                         combinations.keras_model_type_combinations()))
+  @keras_parameterized.run_with_all_model_types
+  @keras_parameterized.run_all_keras_modes
   def test_passing_initial_weights_values(self):
     kernel_value = np.random.random((10, 2))
-    layer_with_weights = layers.Dense(2, use_bias=False, weights=[kernel_value])
+    layer_with_weights = keras.layers.Dense(
+        2, use_bias=False, weights=[kernel_value])
 
     model = testing_utils.get_model_from_layers([layer_with_weights],
                                                 input_shape=(10,))
@@ -471,9 +469,9 @@ class BaseLayerTest(keras_parameterized.TestCase):
     self.assertAllClose(model.layers[-1].get_weights()[0], kernel_value)
     self.assertAllClose(out, np.dot(inputs, kernel_value))
 
-  @combinations.generate(combinations.combine(mode=['graph', 'eager']))
+  @test_util.run_in_graph_and_eager_modes
   def test_set_weights_and_get_weights(self):
-    layer = layers.Dense(2)
+    layer = keras.layers.Dense(2)
     layer.build((None, 10))
     kernel = np.random.random((10, 2))
     bias = np.random.random((2,))
@@ -491,7 +489,7 @@ class BaseLayerTest(keras_parameterized.TestCase):
 
   def test_get_config_error(self):
 
-    class MyLayer(base_layer.Layer):
+    class MyLayer(keras.layers.Layer):
 
       def __init__(self, my_kwarg='default', **kwargs):
         super(MyLayer, self).__init__(**kwargs)
@@ -502,7 +500,7 @@ class BaseLayerTest(keras_parameterized.TestCase):
     with self.assertRaisesRegexp(NotImplementedError, 'Layer MyLayer has'):
       MyLayer('custom').get_config()
 
-    class MyLayerNew(base_layer.Layer):
+    class MyLayerNew(keras.layers.Layer):
 
       def __init__(self, my_kwarg='default', **kwargs):
         super(MyLayerNew, self).__init__(**kwargs)
@@ -517,7 +515,7 @@ class BaseLayerTest(keras_parameterized.TestCase):
     # from an overridden `get_config`:
     self.assertEqual(MyLayerNew('custom').get_config()['my_kwarg'], 'custom')
 
-    class MyLayerNew2(base_layer.Layer):
+    class MyLayerNew2(keras.layers.Layer):
 
       def __init__(self, name='MyLayerName', dtype=None, **kwargs):  # pylint:disable=redefined-outer-name
         super(MyLayerNew2, self).__init__(name=name, dtype=dtype, **kwargs)
@@ -526,27 +524,27 @@ class BaseLayerTest(keras_parameterized.TestCase):
     # arguments, no error is thrown:
     self.assertEqual(MyLayerNew2(name='New').get_config()['name'], 'New')
 
-  @combinations.generate(combinations.combine(mode=['graph', 'eager']))
+  @test_util.run_in_graph_and_eager_modes
   def test_count_params(self):
-    dense = layers.Dense(16)
+    dense = keras.layers.Dense(16)
     dense.build((None, 4))
     self.assertEqual(dense.count_params(), 16 * 4 + 16)
 
-    dense = layers.Dense(16)
+    dense = keras.layers.Dense(16)
     with self.assertRaisesRegexp(ValueError, 'call `count_params`'):
       dense.count_params()
 
-    model = sequential.Sequential(layers.Dense(16))
+    model = keras.Sequential(keras.layers.Dense(16))
     with self.assertRaisesRegexp(ValueError, 'call `count_params`'):
       model.count_params()
 
-    dense = layers.Dense(16, input_dim=4)
-    model = sequential.Sequential(dense)
+    dense = keras.layers.Dense(16, input_dim=4)
+    model = keras.Sequential(dense)
     self.assertEqual(model.count_params(), 16 * 4 + 16)
 
   def test_super_not_called(self):
 
-    class CustomLayerNotCallingSuper(base_layer.Layer):
+    class CustomLayerNotCallingSuper(keras.layers.Layer):
 
       def __init__(self):
         pass
@@ -555,11 +553,11 @@ class BaseLayerTest(keras_parameterized.TestCase):
     with self.assertRaisesRegexp(RuntimeError, 'You must call `super()'):
       layer(np.random.random((10, 2)))
 
-  @combinations.generate(combinations.combine(mode=['graph', 'eager']))
+  @test_util.run_in_graph_and_eager_modes
   def test_first_arg_not_called_inputs(self):
     x, y = array_ops.ones((10, 1)), array_ops.ones((10, 1))
 
-    class ArgLayer(base_layer.Layer):
+    class ArgLayer(keras.layers.Layer):
 
       def call(self, x, y):
         return x + y
@@ -568,7 +566,7 @@ class BaseLayerTest(keras_parameterized.TestCase):
     out = self.evaluate(layer(x=x, y=y))
     self.assertAllClose(out, 2 * np.ones((10, 1)))
 
-    class KwargLayer(base_layer.Layer):
+    class KwargLayer(keras.layers.Layer):
 
       def call(self, x=None, y=None):
         return x + y
@@ -580,7 +578,7 @@ class BaseLayerTest(keras_parameterized.TestCase):
     with self.assertRaisesRegexp(ValueError, 'must always be passed'):
       layer(y=y)
 
-    class TFFunctionLayer(base_layer.Layer):
+    class TFFunctionLayer(keras.layers.Layer):
 
       @def_function.function
       def call(self, x, y=None):
@@ -593,8 +591,7 @@ class BaseLayerTest(keras_parameterized.TestCase):
     self.assertAllClose(out, 2 * np.ones((10, 1)))
 
   def test_build_input_shape(self):
-
-    class CustomLayer(base_layer.Layer):
+    class CustomLayer(keras.layers.Layer):
 
       def build(self, input_shape):
         self.add_weight('w', shape=input_shape[1:])
@@ -608,36 +605,36 @@ class BaseLayerTest(keras_parameterized.TestCase):
     self.assertEqual([None, 1, 2, 3], layer._build_input_shape)
 
     layer = CustomLayer()
-    layer(input_layer.Input((3,)))
+    layer(keras.Input((3,)))
     self.assertTrue(layer.built)
     self.assertEqual([None, 3], layer._build_input_shape.as_list())
 
 
-class SymbolicSupportTest(keras_parameterized.TestCase):
+class SymbolicSupportTest(test.TestCase):
 
   def test_using_symbolic_tensors_with_tf_ops(self):
     # Single-input.
-    x = input_layer.Input((3,))
+    x = keras.Input((3,))
     y = math_ops.square(x)
-    self.assertEqual(y.graph, backend.get_graph())
+    self.assertEqual(y.graph, keras.backend.get_graph())
 
     # Multi-inputs.
-    x1, x2 = input_layer.Input((3,)), input_layer.Input((3,))
+    x1, x2 = keras.Input((3,)), keras.Input((3,))
     y = array_ops.concat([x1, x2], axis=1)
-    self.assertEqual(y.graph, backend.get_graph())
+    self.assertEqual(y.graph, keras.backend.get_graph())
 
     # Mixing Keras symbolic tensors and graph tensors from the same graph works.
-    with backend.get_graph().as_default():
-      x1 = input_layer.Input((3,))
-    x2 = input_layer.Input((3,))
+    with keras.backend.get_graph().as_default():
+      x1 = keras.Input((3,))
+    x2 = keras.Input((3,))
     y = math_ops.matmul(x1, x2)
-    self.assertEqual(y.graph, backend.get_graph())
+    self.assertEqual(y.graph, keras.backend.get_graph())
 
     # Creating same op type (matmul) multiple times in the Keras graph works.
-    x1 = input_layer.Input((3,))
-    x2 = input_layer.Input((3,))
+    x1 = keras.Input((3,))
+    x2 = keras.Input((3,))
     y = math_ops.matmul(x1, x2)
-    self.assertEqual(y.graph, backend.get_graph())
+    self.assertEqual(y.graph, keras.backend.get_graph())
 
   def test_mixing_eager_and_graph_tensors(self):
     with ops.Graph().as_default():
@@ -654,33 +651,33 @@ class SymbolicSupportTest(keras_parameterized.TestCase):
     with self.assertRaisesRegexp(TypeError, 'Graph tensors'):
       math_ops.matmul(x1, x2)
 
-  @combinations.generate(combinations.combine(mode=['graph', 'eager']))
+  @test_util.run_in_graph_and_eager_modes
   def test_mixing_keras_symbolic_tensors_and_eager_tensors(self):
-    x1 = input_layer.Input((3,))
+    x1 = keras.Input((3,))
     x2 = array_ops.ones((3, 3))
     y = math_ops.matmul(x1, x2)
-    self.assertEqual(y.graph, backend.get_graph())
-    fn = backend.function(inputs=[x1], outputs=[y])
+    self.assertEqual(y.graph, keras.backend.get_graph())
+    fn = keras.backend.function(inputs=[x1], outputs=[y])
     x_val = np.random.random((3, 3))
     y_val = np.ones((3, 3))
     self.assertAllClose(fn([x_val])[0],
                         np.matmul(x_val, y_val),
                         atol=1e-5)
 
-  @combinations.generate(combinations.combine(mode=['graph', 'eager']))
+  @test_util.run_in_graph_and_eager_modes
   def test_mixing_keras_symbolic_tensors_and_numpy_arrays(self):
-    x1 = input_layer.Input((3,))
+    x1 = keras.Input((3,))
     x2 = np.ones((3, 3), dtype='float32')
     y = math_ops.matmul(x1, x2)
-    self.assertEqual(y.graph, backend.get_graph())
-    fn = backend.function(inputs=[x1], outputs=[y])
+    self.assertEqual(y.graph, keras.backend.get_graph())
+    fn = keras.backend.function(inputs=[x1], outputs=[y])
     x_val = np.random.random((3, 3))
     y_val = np.ones((3, 3))
     self.assertAllClose(fn([x_val])[0],
                         np.matmul(x_val, y_val),
                         atol=1e-5)
 
-  @combinations.generate(combinations.combine(mode=['graph', 'eager']))
+  @test_util.run_in_graph_and_eager_modes
   def test_reraising_exception(self):
     # When layer is not dynamic, we have some pattern matching during exception
     # handling to detect when the user is trying to use python control flow.
@@ -695,7 +692,7 @@ class SymbolicSupportTest(keras_parameterized.TestCase):
           raise TypeError('Non-matching TypeError message.')
         easily_identifiable_name()
 
-    inputs = input_layer.Input((3,))
+    inputs = keras.Input((3,))
 
     try:
       _ = TypeErrorLayer()(inputs)
@@ -710,12 +707,12 @@ class SymbolicSupportTest(keras_parameterized.TestCase):
         function_name = last_entry[2]
       self.assertEqual(function_name, 'easily_identifiable_name')
 
-  @combinations.generate(combinations.combine(mode=['graph', 'eager']))
+  @test_util.run_in_graph_and_eager_modes
   def test_summaries_in_tf_function(self):
     if not context.executing_eagerly():
       return
 
-    class MyLayer(base_layer.Layer):
+    class MyLayer(keras.layers.Layer):
 
       def call(self, inputs):
         summary_ops_v2.scalar('mean', math_ops.reduce_mean(inputs))
@@ -742,19 +739,19 @@ class SymbolicSupportTest(keras_parameterized.TestCase):
     self.assertEqual(set(['my_layer/mean']), tags)
 
 
-@combinations.generate(combinations.combine(mode=['graph', 'eager']))
+@test_util.run_all_in_graph_and_eager_modes
 class NestedTrackingTest(test.TestCase):
 
   def test_nested_layer_variable_tracking(self):
     # Test that variables from nested sublayers are
     # being tracked by subclassed layers.
 
-    class MyLayer(base_layer.Layer):
+    class MyLayer(keras.layers.Layer):
 
       def __init__(self):
         super(MyLayer, self).__init__()
-        self.dense1 = layers.Dense(1)
-        self.dense2 = layers.BatchNormalization()
+        self.dense1 = keras.layers.Dense(1)
+        self.dense2 = keras.layers.BatchNormalization()
 
       def build(self, input_shape):
         self.v1 = self.add_weight('v1', shape=input_shape[1:].as_list())
@@ -768,7 +765,7 @@ class NestedTrackingTest(test.TestCase):
         return x + self.v1 + self.v2
 
     layer = MyLayer()
-    inputs = input_layer.Input((1,))
+    inputs = keras.Input((1,))
     _ = layer(inputs)
 
     self.assertEqual(len(layer.weights), 8)
@@ -792,7 +789,7 @@ class NestedTrackingTest(test.TestCase):
     # Test that updates and losses from nested sublayers are
     # being tracked by subclassed layers.
 
-    class UpdateAndLossLayer(base_layer.Layer):
+    class UpdateAndLossLayer(keras.layers.Layer):
 
       def build(self, _):
         self.v1 = self.add_weight('v1', shape=())
@@ -802,7 +799,7 @@ class NestedTrackingTest(test.TestCase):
         self.add_update(state_ops.assign_add(self.v1, 1))
         return inputs + 1
 
-    class MyLayer(base_layer.Layer):
+    class MyLayer(keras.layers.Layer):
 
       def build(self, _):
         self.v1 = self.add_weight('v1', shape=())
@@ -826,23 +823,23 @@ class NestedTrackingTest(test.TestCase):
       self.assertEqual(len(layer.losses), 3)
       self.assertLen(layer.get_losses_for(None), 3)
     else:
-      inputs = input_layer.Input((1,))
+      inputs = keras.Input((1,))
       _ = layer(inputs)
       self.assertEqual(len(layer.losses), 3)
       self.assertEqual(len(layer.updates), 3)
       self.assertLen(layer.get_losses_for(None), 3)
 
   def test_attribute_reassignment(self):
-    l = base_layer.Layer()
-    l.a = base_layer.Layer()
+    l = keras.layers.Layer()
+    l.a = keras.layers.Layer()
     l.a = []
     l.a = variables.Variable(1.)
-    l.a = base_layer.Layer()
-    last_assignment = base_layer.Layer()
+    l.a = keras.layers.Layer()
+    last_assignment = keras.layers.Layer()
     l.a = last_assignment
     l.b = variables.Variable(1.)
     del l.b
-    l.c = base_layer.Layer()
+    l.c = keras.layers.Layer()
     del l.c
     l.d = last_assignment
     del l.d
@@ -855,7 +852,7 @@ class NestedTrackingTest(test.TestCase):
 
   def test_assign_op_not_tracked_as_variable(self):
 
-    class LayerWithAssignAttr(base_layer.Layer):
+    class LayerWithAssignAttr(keras.layers.Layer):
 
       def build(self, input_shape):
         self.v = variables.Variable(1.)
@@ -869,11 +866,11 @@ class NestedTrackingTest(test.TestCase):
   def test_layer_class_not_tracked_as_sublayer(self):
     # See https://github.com/tensorflow/tensorflow/issues/27431 for details.
 
-    class LayerWithClassAttribute(base_layer.Layer):
+    class LayerWithClassAttribute(keras.layers.Layer):
 
       def __init__(self):
         super(LayerWithClassAttribute, self).__init__()
-        self.layer_fn = layers.Dense
+        self.layer_fn = keras.layers.Dense
 
     layer = LayerWithClassAttribute()
     self.assertEmpty(layer.variables)
@@ -881,12 +878,12 @@ class NestedTrackingTest(test.TestCase):
 
   def test_layer_call_fn_args(self):
 
-    class NonDefunLayer(base_layer.Layer):
+    class NonDefunLayer(keras.layers.Layer):
 
       def call(self, inputs, a, mask, b=None, training=None):
         return inputs
 
-    class DefunLayer(base_layer.Layer):
+    class DefunLayer(keras.layers.Layer):
 
       @def_function.function
       def call(self, x, mask, a, training=None, b=None):
@@ -900,18 +897,18 @@ class NestedTrackingTest(test.TestCase):
                      ['x', 'mask', 'a', 'training', 'b'])
 
   def test_sequential_model(self):
-    model = sequential.Sequential(
-        [layers.Dense(10, input_shape=(10,)),
-         layers.Dense(5)])
+    model = keras.Sequential([keras.layers.Dense(10, input_shape=(10,)),
+                              keras.layers.Dense(5)])
     self.assertLen(model.layers, 2)
     self.assertLen(model.weights, 4)
 
     # Make sure a subclass model also works when it is called 'Sequential'.
-    class Sequential(training_lib.Model):
+    class Sequential(keras.Model):
 
       def __init__(self):
         super(Sequential, self).__init__()
-        self.dense_layers = [layers.Dense(10), layers.Dense(5)]
+        self.dense_layers = [keras.layers.Dense(10),
+                             keras.layers.Dense(5)]
 
       def call(self, inputs):
         x = inputs
@@ -923,55 +920,31 @@ class NestedTrackingTest(test.TestCase):
     self.assertLen(s.layers, 2)
     self.assertLen(s.weights, 0)
 
-    s(input_layer.Input((10,)))
+    s(keras.Input((10,)))
     self.assertLen(s.weights, 4)
 
 
-@combinations.generate(combinations.combine(mode=['graph', 'eager']))
+@test_util.run_all_in_graph_and_eager_modes
 class NameScopingTest(keras_parameterized.TestCase):
 
   def test_name_scope_layer(self):
-    x = backend.placeholder(shape=(10, 10))
-    layer = layers.Dense(10, name='MyName')
+    x = keras.backend.placeholder(shape=(10, 10))
+    layer = keras.layers.Dense(10, name='MyName')
     layer(x)
     self.assertEqual(layer.bias.name, 'MyName/bias:0')
     self.assertEqual(layer.kernel.name, 'MyName/kernel:0')
 
-  def test_name_scope_functional_api(self):
-    inputs = input_layer.Input((3,))
-    layer = layers.Dense(10, name='MyName')
-    _ = layer(inputs)
-    self.assertEqual(layer.bias.name, 'MyName/bias:0')
-    self.assertEqual(layer.kernel.name, 'MyName/kernel:0')
-
-  def test_name_scope_functional_api_nested(self):
-
-    class NestedLayer(base_layer.Layer):
-
-      def __init__(self, name='OuterName'):
-        super(NestedLayer, self).__init__(name=name)
-        self.dense = layers.Dense(10, name='InnerName')
-
-      def call(self, inputs):
-        return self.dense(inputs)
-
-    inputs = input_layer.Input((3,))
-    layer = NestedLayer()
-    _ = layer(inputs)
-    self.assertEqual(layer.dense.bias.name, 'OuterName/InnerName/bias:0')
-    self.assertEqual(layer.dense.kernel.name, 'OuterName/InnerName/kernel:0')
-
   def test_name_scope_sublayer(self):
 
-    class NameScopeTracker(base_layer.Layer):
+    class NameScopeTracker(keras.layers.Layer):
 
       def call(self, inputs):
         self.active_name_scope = ops.get_name_scope()
         return inputs
 
-    x = backend.placeholder(shape=(10, 10))
+    x = keras.backend.placeholder(shape=(10, 10))
     sublayer = NameScopeTracker(name='Sublayer')
-    layer = layers.Dense(10, activation=sublayer, name='MyName2')
+    layer = keras.layers.Dense(10, activation=sublayer, name='MyName2')
     layer(x)
     self.assertEqual(layer.bias.name, 'MyName2/bias:0')
     self.assertEqual(layer.kernel.name, 'MyName2/kernel:0')
@@ -979,21 +952,21 @@ class NameScopingTest(keras_parameterized.TestCase):
 
   def test_name_scope_tf_tensor(self):
     x = ops.convert_to_tensor_v2(np.ones((10, 10)))
-    layer = layers.Dense(
-        10, activation=layers.ReLU(name='MyAct'), name='MyName3')
+    layer = keras.layers.Dense(
+        10, activation=keras.layers.ReLU(name='MyAct'), name='MyName3')
     layer(x)
     self.assertEqual(layer.bias.name, 'MyName3/bias:0')
     self.assertEqual(layer.kernel.name, 'MyName3/kernel:0')
 
 
-@combinations.generate(combinations.keras_mode_combinations(mode=['eager']))
+@keras_parameterized.run_all_keras_modes(always_skip_v1=True)
 class AutographControlFlowTest(keras_parameterized.TestCase):
 
   def test_disabling_in_context_is_matched(self):
 
     test_obj = self
 
-    class MyLayer(base_layer.Layer):
+    class MyLayer(keras.layers.Layer):
 
       def call(self, inputs, training=None):
         with test_obj.assertRaisesRegex(TypeError, 'Tensor.*as.*bool'):
@@ -1009,16 +982,16 @@ class AutographControlFlowTest(keras_parameterized.TestCase):
 
   def test_if_training_pattern_output(self):
 
-    class MyLayer(base_layer.Layer):
+    class MyLayer(keras.layers.Layer):
 
       def call(self, inputs, training=None):
         if training:
           return inputs * 1.
         return inputs * 0.
 
-    inputs = input_layer.Input((3,))
+    inputs = keras.Input((3,))
     outputs = MyLayer()(inputs)
-    model = training_lib.Model(inputs, outputs)
+    model = keras.Model(inputs, outputs)
     model.compile(
         'sgd',
         'mse',
@@ -1030,7 +1003,7 @@ class AutographControlFlowTest(keras_parameterized.TestCase):
 
   def test_if_training_pattern_loss(self):
 
-    class MyLayer(base_layer.Layer):
+    class MyLayer(keras.layers.Layer):
 
       def call(self, inputs, training=None):
         if training:
@@ -1040,9 +1013,9 @@ class AutographControlFlowTest(keras_parameterized.TestCase):
         self.add_loss(loss)
         return inputs
 
-    inputs = input_layer.Input((3,))
+    inputs = keras.Input((3,))
     outputs = MyLayer()(inputs)
-    model = training_lib.Model(inputs, outputs)
+    model = keras.Model(inputs, outputs)
     model.compile(
         'sgd',
         'mse',
@@ -1054,7 +1027,7 @@ class AutographControlFlowTest(keras_parameterized.TestCase):
 
   def test_if_training_pattern_metric(self):
 
-    class MyLayer(base_layer.Layer):
+    class MyLayer(keras.layers.Layer):
 
       def call(self, inputs, training=None):
         if training:
@@ -1064,9 +1037,9 @@ class AutographControlFlowTest(keras_parameterized.TestCase):
         self.add_metric(metric, name='my_metric', aggregation='mean')
         return inputs
 
-    inputs = input_layer.Input((3,))
+    inputs = keras.Input((3,))
     outputs = MyLayer()(inputs)
-    model = training_lib.Model(inputs, outputs)
+    model = keras.Model(inputs, outputs)
     model.compile(
         'sgd',
         'mse',
@@ -1082,7 +1055,7 @@ class AutographControlFlowTest(keras_parameterized.TestCase):
 
   def test_if_training_pattern_update(self):
 
-    class MyLayer(base_layer.Layer):
+    class MyLayer(keras.layers.Layer):
 
       def build(self, input_shape):
         self.counter = self.add_weight(
@@ -1096,20 +1069,60 @@ class AutographControlFlowTest(keras_parameterized.TestCase):
         self.counter.assign_add(increment)
         return inputs
 
-    inputs = input_layer.Input((3,))
+    inputs = keras.Input((3,))
     layer = MyLayer()
     outputs = layer(inputs)
-    model = training_lib.Model(inputs, outputs)
+    model = keras.Model(inputs, outputs)
     model.compile(
         'sgd',
         'mse',
         run_eagerly=testing_utils.should_run_eagerly())
     model.train_on_batch(np.ones((2, 3)), np.ones((2, 3)))
-    self.assertEqual(backend.get_value(layer.counter), 1.)
+    self.assertEqual(keras.backend.get_value(layer.counter), 1.)
+
+  def test_conditional_updates_in_call(self):
+
+    class MyLayer(keras.layers.Layer):
+
+      def __init__(self):
+        super(MyLayer,
+              self).__init__(dynamic=testing_utils.should_run_eagerly())
+
+      def build(self, input_shape):
+        self.counter = self.add_weight(
+            shape=(), trainable=False, initializer='zeros')
+
+      def call(self, inputs, training=None):
+        if training:
+          z = math_ops.reduce_sum(inputs)
+          self.add_update(lambda: self.counter.assign_add(z))
+        return inputs
+
+      def compute_output_shape(self, input_shape):
+        return input_shape
+
+    if testing_utils.should_run_eagerly():
+      inputs = keras.Input((3,))
+      layer = MyLayer()
+      outputs = layer(inputs)
+      model = keras.Model(inputs, outputs)
+      model.compile(
+          'sgd',
+          'mse',
+          run_eagerly=testing_utils.should_run_eagerly())
+      model.train_on_batch(np.ones((2, 3)), np.ones((2, 3)))
+      self.assertEqual(keras.backend.get_value(layer.counter), 6.)
+    else:
+      # TODO(fchollet): support the same workflow in graph mode.
+      with self.assertRaisesRegexp(RuntimeError,
+                                   '`add_update` in a control flow branch'):
+        layer = MyLayer()
+        layer(keras.Input((3,)))
+        _ = layer.updates
 
   def test_conditional_losses_in_call(self):
 
-    class MyLayer(base_layer.Layer):
+    class MyLayer(keras.layers.Layer):
 
       def __init__(self):
         super(MyLayer,
@@ -1123,18 +1136,26 @@ class AutographControlFlowTest(keras_parameterized.TestCase):
       def compute_output_shape(self, input_shape):
         return input_shape
 
-    inputs = input_layer.Input((3,))
-    layer = MyLayer()
-    outputs = layer(inputs)
-    model = training_lib.Model(inputs, outputs)
-    model.compile('sgd', 'mse', run_eagerly=testing_utils.should_run_eagerly())
-    loss = model.train_on_batch(np.ones((2, 3)), np.ones((2, 3)))
-    self.assertEqual(loss, 2 * 3)
+    if testing_utils.should_run_eagerly():
+      inputs = keras.Input((3,))
+      layer = MyLayer()
+      outputs = layer(inputs)
+      model = keras.Model(inputs, outputs)
+      model.compile(
+          'sgd',
+          'mse',
+          run_eagerly=testing_utils.should_run_eagerly())
+      loss = model.train_on_batch(np.ones((2, 3)), np.ones((2, 3)))
+      self.assertEqual(loss, 2 * 3)
+    else:
+      with self.assertRaisesRegexp(RuntimeError,
+                                   '`add_loss` in a control flow branch'):
+        layer = MyLayer()(keras.Input((3,)))
 
   def test_conditional_callable_losses(self):
-    model = sequential.Sequential([
-        layers.Dense(
-            1, kernel_regularizer=regularizers.l2(1e-4), input_shape=(1,))
+    model = keras.Sequential([
+        keras.layers.Dense(
+            1, kernel_regularizer=keras.regularizers.l2(1e-4), input_shape=(1,))
     ])
     model._run_eagerly = testing_utils.should_run_eagerly()
 
@@ -1154,7 +1175,7 @@ class AutographControlFlowTest(keras_parameterized.TestCase):
 
   def test_conditional_metrics_in_call(self):
 
-    class MyLayer(base_layer.Layer):
+    class MyLayer(keras.layers.Layer):
 
       def __init__(self):
         super(MyLayer,
@@ -1170,22 +1191,31 @@ class AutographControlFlowTest(keras_parameterized.TestCase):
       def compute_output_shape(self, input_shape):
         return input_shape
 
-    inputs = input_layer.Input((3,))
-    layer = MyLayer()
-    outputs = layer(inputs)
-    model = training_lib.Model(inputs, outputs)
-    model.compile('sgd', 'mse', run_eagerly=testing_utils.should_run_eagerly())
-    history = model.fit(np.ones((2, 3)), np.ones((2, 3)))
-    self.assertEqual(history.history['sum'][-1], 2 * 3)
+    if testing_utils.should_run_eagerly():
+      inputs = keras.Input((3,))
+      layer = MyLayer()
+      outputs = layer(inputs)
+      model = keras.Model(inputs, outputs)
+      model.compile(
+          'sgd',
+          'mse',
+          run_eagerly=testing_utils.should_run_eagerly())
+      history = model.fit(np.ones((2, 3)), np.ones((2, 3)))
+      self.assertEqual(history.history['sum'][-1], 2 * 3)
+    else:
+      # TODO(fchollet): support the same workflow in graph mode.
+      with self.assertRaisesRegexp(RuntimeError,
+                                   '`add_metric` in a control flow branch'):
+        layer = MyLayer()(keras.Input((3,)))
 
   def test_conditional_activity_regularizer_in_call(self):
 
-    class TestModel(training_lib.Model):
+    class TestModel(keras.Model):
 
       def __init__(self):
         super(TestModel, self).__init__(
             name='test_model', dynamic=testing_utils.should_run_eagerly())
-        self.layer = layers.Dense(2, activity_regularizer='l2')
+        self.layer = keras.layers.Dense(2, activity_regularizer='l2')
 
       def call(self, x, training=None):
         if math_ops.greater(math_ops.reduce_sum(x), 0.0):
@@ -1205,19 +1235,20 @@ class AutographControlFlowTest(keras_parameterized.TestCase):
     if testing_utils.should_run_eagerly():
       model.fit(x, y, epochs=2, batch_size=5)
     else:
-      with self.assertRaisesRegexp(errors_impl.InaccessibleTensorError,
-                                   'ActivityRegularizer'):
+      with self.assertRaisesRegexp(
+          RuntimeError, '`activity_regularizer` in a control flow branch'):
         model.fit(x, y, epochs=2, batch_size=5)
 
   def test_conditional_activity_regularizer_with_wrappers_in_call(self):
 
-    class TestModel(training_lib.Model):
+    class TestModel(keras.Model):
 
       def __init__(self):
         super(TestModel, self).__init__(
             name='test_model', dynamic=testing_utils.should_run_eagerly())
-        self.layer = layers.TimeDistributed(
-            layers.Dense(2, activity_regularizer='l2'), input_shape=(3, 4))
+        self.layer = keras.layers.TimeDistributed(
+            keras.layers.Dense(2, activity_regularizer='l2'),
+            input_shape=(3, 4))
 
       def call(self, x, training=None):
         if math_ops.greater(math_ops.reduce_sum(x), 0.0):
@@ -1237,13 +1268,13 @@ class AutographControlFlowTest(keras_parameterized.TestCase):
     if testing_utils.should_run_eagerly():
       model.fit(x, y, epochs=2, batch_size=5)
     else:
-      with self.assertRaisesRegexp(errors_impl.InaccessibleTensorError,
-                                   'ActivityRegularizer'):
+      with self.assertRaisesRegexp(
+          RuntimeError, '`activity_regularizer` in a control flow branch'):
         model.fit(x, y, epochs=2, batch_size=5)
 
 
-class AddLayer(base_layer.Layer):
-  """A layer which adds its input to a variable.
+class AddLayer(keras.layers.Layer):
+  """A layer which adds it's input to a variable.
 
   Useful for testing a layer with a variable
   """
@@ -1256,8 +1287,8 @@ class AddLayer(base_layer.Layer):
     return inputs + self.v
 
 
-class IdentityLayer(base_layer.Layer):
-  """A layer that returns its input.
+class IdentityLayer(keras.layers.Layer):
+  """A layer that returns it's input.
 
   Useful for testing a layer without a variable.
   """
@@ -1266,7 +1297,7 @@ class IdentityLayer(base_layer.Layer):
     return inputs
 
 
-@combinations.generate(combinations.combine(mode=['graph', 'eager']))
+@test_util.run_all_in_graph_and_eager_modes
 class DTypeTest(keras_parameterized.TestCase):
 
   # This class only have tests relating to layer.dtype. Tests for dtype policies
@@ -1334,7 +1365,7 @@ class DTypeTest(keras_parameterized.TestCase):
   @testing_utils.enable_v2_dtype_behavior
   def multiple_inputs_cast_to_dtype(self):
 
-    class MultiIdentityLayer(base_layer.Layer):
+    class MultiIdentityLayer(keras.layers.Layer):
 
       def call(self, inputs):
         return [array_ops.identity(x) for x in inputs]
@@ -1363,7 +1394,7 @@ class DTypeTest(keras_parameterized.TestCase):
   @testing_utils.enable_v2_dtype_behavior
   def test_extra_args_and_kwargs_not_casted(self):
 
-    class IdentityLayerWithArgs(base_layer.Layer):
+    class IdentityLayerWithArgs(keras.layers.Layer):
 
       def call(self, inputs, *args, **kwargs):
         return nest.flatten([inputs, args, kwargs])
@@ -1464,10 +1495,9 @@ class DTypeTest(keras_parameterized.TestCase):
       ragged = ragged_tensor.RaggedTensor.from_row_splits(
           values=array_ops.constant([1., 2., 3.], dtype='float32'),
           row_splits=array_ops.constant([0, 2, 2, 3], dtype='int64'))
-      model = sequential.Sequential([
-          input_layer.InputLayer(input_shape=(None,), ragged=True),
-          IdentityLayer()
-      ])
+      model = keras.Sequential([
+          keras.layers.InputLayer(input_shape=(None,), ragged=True),
+          IdentityLayer()])
       model.compile(rmsprop.RMSprop(0.001), loss='mse')
       model.train_on_batch(ragged)
 

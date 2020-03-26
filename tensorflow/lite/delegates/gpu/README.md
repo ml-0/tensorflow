@@ -113,7 +113,7 @@ const TfLiteGpuDelegateOptionsV2 kDefaultOptions =
     TfLiteGpuDelegateOptionsV2Default();
 ```
 
-Similar for `NewTfLiteMetalDelegate()`:
+Similar for `NewTfLiteMetalDelgate()`:
 
 ```c++
 const TfLiteMetalDelegateOptions kDefaultOptions = {

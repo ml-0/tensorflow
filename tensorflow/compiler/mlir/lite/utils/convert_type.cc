@@ -15,13 +15,12 @@ limitations under the License.
 
 #include "tensorflow/compiler/mlir/lite/utils/convert_type.h"
 
-#include "mlir/IR/Builders.h"  // from @llvm-project
-#include "mlir/IR/StandardTypes.h"  // from @llvm-project
-#include "mlir/IR/Types.h"  // from @llvm-project
+#include "mlir/IR/Builders.h"  // TF:llvm-project
+#include "mlir/IR/StandardTypes.h"  // TF:llvm-project
+#include "mlir/IR/Types.h"  // TF:llvm-project
 #include "tensorflow/compiler/mlir/tensorflow/ir/tf_types.h"
 #include "tensorflow/compiler/xla/statusor.h"
-#include "tensorflow/core/framework/types.pb.h"
-#include "tensorflow/core/platform/errors.h"
+#include "tensorflow/core/framework/types.h"
 #include "tensorflow/lite/schema/schema_generated.h"
 
 namespace tflite {
@@ -39,7 +38,7 @@ mlir::Type ConvertElementType(tflite::TensorType type, mlir::Builder builder) {
     case tflite::TensorType_INT32:
       return builder.getIntegerType(32);
     case tflite::TensorType_UINT8:
-      return builder.getIntegerType(8, /*isSigned=*/false);
+      return mlir::TF::Uint8Type::get(builder.getContext());
     case tflite::TensorType_INT64:
       return builder.getIntegerType(64);
     case tflite::TensorType_STRING:

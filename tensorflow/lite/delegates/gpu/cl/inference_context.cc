@@ -169,9 +169,9 @@ CLNode& CLNode::operator=(CLNode&& node) {
   return *this;
 }
 
-absl::Status InferenceContext::InitFromGraph(
-    const CreateInferenceInfo& create_info, const GraphFloat32& graph,
-    Environment* env) {
+Status InferenceContext::InitFromGraph(const CreateInferenceInfo& create_info,
+                                       const GraphFloat32& graph,
+                                       Environment* env) {
   CreationContext creation_context;
   creation_context.device = env->GetDevicePtr();
   creation_context.context = &env->context();
@@ -181,14 +181,12 @@ absl::Status InferenceContext::InitFromGraph(
   ReserveGraphTensors(create_info, creation_context, graph);
   precision_ = create_info.precision;
   storage_type_ = create_info.storage_type;
-  if (env->device().IsMali()) {
+  auto vendor = env->device().vendor();
+  if (vendor == Vendor::MALI) {
     need_flush_ = true;
     need_manual_release_ = true;
-
-    flush_periodically_ = true;
-    flush_period_ = 24;
   }
-  if (env->device().IsPowerVR()) {
+  if (vendor == Vendor::POWERVR) {
     need_flush_ = true;
   }
   CopyInAndOutIds(graph);
@@ -206,15 +204,15 @@ absl::Status InferenceContext::InitFromGraph(
     tuning_parameters.tuning_type = TuningType::FAST;
   }
   RETURN_IF_ERROR(Tune(tuning_parameters));
-  return absl::OkStatus();
+  return OkStatus();
 }
 
-absl::Status InferenceContext::InitFromGraphWithTransforms(
+Status InferenceContext::InitFromGraphWithTransforms(
     const CreateInferenceInfo& create_info, GraphFloat32* graph,
     Environment* env) {
   RETURN_IF_ERROR(RunGraphTransforms(graph));
   RETURN_IF_ERROR(InitFromGraph(create_info, *graph, env));
-  return absl::OkStatus();
+  return OkStatus();
 }
 
 void InferenceContext::CopyInAndOutIds(const GraphFloat32& graph) {
@@ -258,7 +256,7 @@ void InferenceContext::ReserveGraphTensors(
   tensor_reserver_.SetNext(max_id + 1);
 }
 
-absl::Status InferenceContext::ConvertOperations(
+Status InferenceContext::ConvertOperations(
     const CreationContext& creation_context, const GraphFloat32& graph,
     ModelHints hints) {
   std::vector<Node*> graph_nodes = graph.nodes();
@@ -343,7 +341,7 @@ absl::Status InferenceContext::ConvertOperations(
     }
   }
 
-  return absl::OkStatus();
+  return OkStatus();
 }
 
 void InferenceContext::Merge() {
@@ -402,12 +400,6 @@ void InferenceContext::Merge() {
 void InferenceContext::GetUsages(
     const std::function<bool(const TensorDescriptor&)>& functor,
     std::map<ValueId, int2>* usages) {
-  for (ValueId in_id : input_ids_) {
-    const auto& desc = tensor_reserver_.Get(in_id).descriptor;
-    if (functor(desc)) {
-      AddUsage(in_id, 0, usages);
-    }
-  }
   for (int op_index = 0; op_index < nodes_.size(); ++op_index) {
     auto tensors = GetCLNodeTensors(nodes_[op_index]);
     for (auto& tensor : tensors) {
@@ -416,7 +408,7 @@ void InferenceContext::GetUsages(
       }
     }
   }
-  for (ValueId out_id : output_ids_) {
+  for (auto& out_id : output_ids_) {
     const auto& desc = tensor_reserver_.Get(out_id).descriptor;
     if (functor(desc)) {
       AddUsage(out_id, nodes_.size(), usages);
@@ -424,15 +416,15 @@ void InferenceContext::GetUsages(
   }
 }
 
-absl::Status InferenceContext::AllocateMemory(const CLDevice& device,
-                                              CLContext* context) {
+Status InferenceContext::AllocateMemory(const CLDevice& device,
+                                        CLContext* context) {
   RETURN_IF_ERROR(AllocateMemoryForBuffers(device, context));
   RETURN_IF_ERROR(AllocateMemoryForStrongShapes(device, context));
-  return absl::OkStatus();
+  return OkStatus();
 }
 
-absl::Status InferenceContext::AllocateMemoryForBuffers(const CLDevice& device,
-                                                        CLContext* context) {
+Status InferenceContext::AllocateMemoryForBuffers(const CLDevice& device,
+                                                  CLContext* context) {
   std::map<ValueId, int2> buffer_usages;
   GetUsages(
       [](const TensorDescriptor& t) { return IsBufferBased(t.storage_type); },
@@ -480,11 +472,11 @@ absl::Status InferenceContext::AllocateMemoryForBuffers(const CLDevice& device,
       created_tensors[tensor_index] = true;
     }
   }
-  return absl::OkStatus();
+  return OkStatus();
 }
 
-absl::Status InferenceContext::AllocateMemoryForStrongShapes(
-    const CLDevice& device, CLContext* context) {
+Status InferenceContext::AllocateMemoryForStrongShapes(const CLDevice& device,
+                                                       CLContext* context) {
   std::map<ValueId, int2> usages;
   GetUsages(
       [](const TensorDescriptor& t) { return !IsBufferBased(t.storage_type); },
@@ -517,7 +509,7 @@ absl::Status InferenceContext::AllocateMemoryForStrongShapes(
       }
     }
   }
-  return absl::OkStatus();
+  return OkStatus();
 }
 
 void InferenceContext::BindMemoryToOperations() {
@@ -539,44 +531,38 @@ void InferenceContext::BindMemoryToOperations() {
   }
 }
 
-absl::Status InferenceContext::Compile(
-    const CreationContext& creation_context) {
+Status InferenceContext::Compile(const CreationContext& creation_context) {
   for (auto& node : nodes_) {
     RETURN_IF_ERROR(node.operations[0]->Compile(creation_context));
   }
-  return absl::OkStatus();
+  return OkStatus();
 }
 
-absl::Status InferenceContext::Tune(const TuningParameters& tuning_parameters) {
+Status InferenceContext::Tune(const TuningParameters& tuning_parameters) {
   for (auto& node : nodes_) {
     RETURN_IF_ERROR(node.operations[0]->Tune(tuning_parameters));
   }
-  return absl::OkStatus();
+  return OkStatus();
 }
 
-absl::Status InferenceContext::AddToQueue(CLCommandQueue* queue) {
+Status InferenceContext::AddToQueue(CLCommandQueue* queue) {
   if (need_manual_release_) {
     if (prev_enqueue_start_point_.is_valid()) {
       prev_enqueue_start_point_.Wait();
     }
     RETURN_IF_ERROR(queue->EnqueueEvent(&prev_enqueue_start_point_));
   }
-  int counter = 0;
   for (auto& node : nodes_) {
     RETURN_IF_ERROR(node.operations[0]->AddToQueue(queue));
-    counter++;
-    if (flush_periodically_ && counter % flush_period_ == 0) {
-      clFlush(queue->queue());
-    }
   }
   if (need_flush_) {
     clFlush(queue->queue());
   }
-  return absl::OkStatus();
+  return OkStatus();
 }
 
-absl::Status InferenceContext::Profile(ProfilingCommandQueue* queue,
-                                       ProfilingInfo* result) {
+Status InferenceContext::Profile(ProfilingCommandQueue* queue,
+                                 ProfilingInfo* result) {
   queue->ResetMeasurements();
   for (auto& node : nodes_) {
     queue->SetEventsLabel(node.name);
@@ -584,7 +570,7 @@ absl::Status InferenceContext::Profile(ProfilingCommandQueue* queue,
   }
   RETURN_IF_ERROR(queue->WaitForCompletion());
   *result = queue->GetProfilingInfo();
-  return absl::OkStatus();
+  return OkStatus();
 }
 
 uint64_t InferenceContext::GetSizeOfMemoryAllocatedForIntermediateTensors()
@@ -609,15 +595,13 @@ Tensor* InferenceContext::GetTensor(ValueId id) {
   }
 }
 
-absl::Status InferenceContext::SetInputTensor(ValueId id,
-                                              const TensorFloat32& tensor,
-                                              CLCommandQueue* queue) {
+Status InferenceContext::SetInputTensor(ValueId id, const TensorFloat32& tensor,
+                                        CLCommandQueue* queue) {
   return GetTensor(id)->WriteData(queue, tensor);
 }
 
-absl::Status InferenceContext::GetOutputTensor(ValueId id,
-                                               CLCommandQueue* queue,
-                                               TensorFloat32* result) {
+Status InferenceContext::GetOutputTensor(ValueId id, CLCommandQueue* queue,
+                                         TensorFloat32* result) {
   const auto& gpu_tensor = *GetTensor(id);
   const auto dst_shape = BHWC(gpu_tensor.Batch(), gpu_tensor.Height(),
                               gpu_tensor.Width(), gpu_tensor.Channels());
@@ -627,17 +611,17 @@ absl::Status InferenceContext::GetOutputTensor(ValueId id,
   return gpu_tensor.ReadData(queue, result);
 }
 
-absl::Status RunGraphTransforms(GraphFloat32* graph) {
+Status RunGraphTransforms(GraphFloat32* graph) {
   auto merge_padding_transform = NewMergePaddingWithAdd();
   auto add_bias_transform = NewAddBias();
   ModelTransformer transformer(graph, /*reporter=*/nullptr);
   if (!transformer.Apply("add_bias", add_bias_transform.get())) {
-    return absl::InternalError("Invalid add_bias transform");
+    return InternalError("Invalid add_bias transform");
   }
   if (!transformer.Apply("merge_padding", merge_padding_transform.get())) {
-    return absl::InternalError("Invalid merge_padding transform");
+    return InternalError("Invalid merge_padding transform");
   }
-  return absl::OkStatus();
+  return OkStatus();
 }
 
 }  // namespace cl

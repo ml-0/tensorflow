@@ -29,8 +29,6 @@ limitations under the License.
 
 namespace tflite {
 
-namespace impl {
-
 namespace {
 
 struct TfLiteQuantizationDeleter {
@@ -1350,7 +1348,5 @@ TfLiteStatus Subgraph::ModifyGraphWithDelegate(TfLiteDelegate* delegate) {
 
   return status;
 }
-
-}  // namespace impl
 
 }  // namespace tflite

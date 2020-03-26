@@ -40,7 +40,6 @@ limitations under the License.
 #include "tensorflow/lite/delegates/gpu/metal/api.h"
 #include "tensorflow/lite/delegates/gpu/metal/buffer_convert.h"
 #include "tensorflow/lite/delegates/gpu/metal/common.h"
-#include "tensorflow/lite/delegates/gpu/metal/environment.h"
 #include "tensorflow/lite/delegates/gpu/metal/compiled_model.h"
 #include "tensorflow/lite/delegates/gpu/metal/inference_context.h"
 #include "tensorflow/lite/delegates/gpu/metal/runtime_options.h"
@@ -198,13 +197,13 @@ class Delegate {
     }
   }
 
-  absl::Status BindBufferToTensor(id<MTLBuffer> buffer, int tensor_index) {
+  Status BindBufferToTensor(id<MTLBuffer> buffer, int tensor_index) {
     for (auto& input : graph_inputs_) {
       if (input.tensor_id == tensor_index) {
         input_output_buffers_[input.id] = buffer;
         bphwc4_buffers_[input.id] = buffer;
         input.set_externally = true;
-        return absl::OkStatus();
+        return OkStatus();
       }
     }
     for (auto& output : graph_outputs_) {
@@ -212,10 +211,10 @@ class Delegate {
         input_output_buffers_[output.id] = buffer;
         bphwc4_buffers_[output.id] = buffer;
         output.set_externally = true;
-        return absl::OkStatus();
+        return OkStatus();
       }
     }
-    return absl::NotFoundError("Couldn't find tensor: " + std::to_string(tensor_index));
+    return NotFoundError("Couldn't find tensor: " + std::to_string(tensor_index));
   }
 
   void SetCommandEncoder(
@@ -225,7 +224,7 @@ class Delegate {
     external_command_encoder_ = encoder;
   }
 
-  absl::Status Prepare(TfLiteContext* context, const TfLiteDelegateParams* delegate_params) {
+  Status Prepare(TfLiteContext* context, const TfLiteDelegateParams* delegate_params) {
     // Extract TFLite delegate execution plan from the context and convert it into FlowGraph32.
     GraphFloat32 graph;
     RETURN_IF_ERROR(BuildModel(context, delegate_params, &graph));
@@ -234,7 +233,7 @@ class Delegate {
     NullTransformationReporter reporter;
     ModelTransformer transformer(&graph, &reporter);
     if (!ApplyGeneralTransformations(&transformer)) {
-      return absl::InternalError("Graph general transformations failed");
+      return InternalError("Graph general transformations failed");
     }
 
     // TODO(impjdi): Remove code duplication.
@@ -265,7 +264,7 @@ class Delegate {
       if (tensor->allocation_type == TfLiteAllocationType::kTfLiteMmapRo) continue;
       const auto* input = find_value(tensor_index);
       if (!input || tensor->type != TfLiteType::kTfLiteFloat32) {
-        return absl::NotFoundError("Input tensor is not found in the graph.");
+        return NotFoundError("Input tensor is not found in the graph.");
       }
 
       inputs_.push_back(input->id);
@@ -283,7 +282,7 @@ class Delegate {
       auto* tensor = context->tensors + tensor_index;
       const auto* output = find_value(tensor_index);
       if (!output || tensor->type != TfLiteType::kTfLiteFloat32) {
-        return absl::NotFoundError("Output tensor is not found in the graph.");
+        return NotFoundError("Output tensor is not found in the graph.");
       }
 
       outputs_.push_back(output->id);
@@ -296,17 +295,7 @@ class Delegate {
     if (options_.allow_precision_loss) {
       storage_type_size = sizeof(HalfBits);
       runtime_options.storage_precision = RuntimeOptions::Precision::FP16;
-      const auto gpu_type = GetGpuType();
-      const bool powervr = gpu_type == GpuType::kA7 || gpu_type == GpuType::kA8 ||
-                           gpu_type == GpuType::kA9 || gpu_type == GpuType::kA10;
-      if (powervr) {
-        // PowerVR gpus support only round to zero for floating-point operations,
-        // to increase precision we will use F32 accumulator in this case
-        runtime_options.accumulator_precision = RuntimeOptions::Precision::FP32;
-      } else {
-        // Apple own gpus support round to nearest and have better precision
-        runtime_options.accumulator_precision = RuntimeOptions::Precision::FP16;
-      }
+      runtime_options.accumulator_precision = RuntimeOptions::Precision::FP16;
     } else {
       storage_type_size = sizeof(float);
       runtime_options.storage_precision = RuntimeOptions::Precision::FP32;
@@ -323,9 +312,7 @@ class Delegate {
       const auto& input_tensor = tensors_[input];
       const auto tensor_id = input_tensor.tensor_id;
       input_ids.push_back(input);
-      if (input_tensor.shape.b != 1) {
-        return absl::UnimplementedError("Batching is not supported yet.");
-      }
+      if (input_tensor.shape.b != 1) return UnimplementedError("Batching is not supported yet.");
       input_dimensions[input] = input_tensor.shape;
       graph_inputs_.push_back({
           input,               // .id
@@ -348,7 +335,7 @@ class Delegate {
                                              isFloat16:options_.allow_precision_loss
                                        convertToPBHWC4:true];
           if (converter_to_BPHWC4_ == nil) {
-            return absl::InternalError("Error initialization of input buffer converter");
+            return InternalError("Error initialization of input buffer converter");
           }
         }
       } else {
@@ -385,7 +372,7 @@ class Delegate {
                                              isFloat16:options_.allow_precision_loss
                                        convertToPBHWC4:false];
           if (converter_from_BPHWC4_ == nil) {
-            return absl::InternalError("Error initialization of output buffer converter");
+            return InternalError("Error initialization of output buffer converter");
           }
         }
       } else {
@@ -408,10 +395,10 @@ class Delegate {
     RETURN_IF_ERROR([inference_context_ setInputDimensions:input_dimensions
                                           outputDimensions:&output_dimensions
                                            taskDescriptors:optimized_model]);
-    return absl::OkStatus();
+    return OkStatus();
   }
 
-  absl::Status Invoke(TfLiteContext* context) {
+  Status Invoke(TfLiteContext* context) {
     if (options_.wait_type == TFLGpuDelegateWaitType::TFLGpuDelegateWaitTypeAggressive)
       gpu_alarm_clock_->Stop();
     // We need only synchronization so volatile works better than atomic which reads from global
@@ -516,11 +503,11 @@ class Delegate {
       // External command encoder is assigned so all output buffers are controlled by a user.
       for (const auto& output : graph_outputs_) {
         if (!output.set_externally) {
-          return absl::InternalError(
+          return InternalError(
               "External command encoder is used, but not all output buffers are bound.");
         }
       }
-      return absl::OkStatus();
+      return OkStatus();
     }
 
     // Retrieve data from GPU and convert from PHWC4 to HWC.
@@ -531,7 +518,7 @@ class Delegate {
       const void* gpu_ptr = [input_output_buffers_[output.id] contents];
       std::memcpy(tensor->data.f, gpu_ptr, output.shape.DimensionsProduct() * sizeof(float));
     }
-    return absl::OkStatus();
+    return OkStatus();
   }
 
   TfLiteDelegate* tflite_delegate() { return &delegate_; }
@@ -598,7 +585,7 @@ TfLiteStatus DelegatePrepare(TfLiteContext* context, TfLiteDelegate* delegate) {
         const auto status = metal_delegate->Prepare(context, params);
         if (status.ok()) return metal_delegate;
         context->ReportError(context, "TfLiteGpuDelegate Prepare: %s",
-                             std::string(status.message()).c_str());
+                             status.error_message().c_str());
         return nullptr;
       },
       // .free
@@ -612,7 +599,7 @@ TfLiteStatus DelegatePrepare(TfLiteContext* context, TfLiteDelegate* delegate) {
         const auto status = GetMetalDelegate(node)->Invoke(context);
         if (status.ok()) return kTfLiteOk;
         context->ReportError(context, "TfLiteMetalDelegate Invoke: %s",
-                             std::string(status.message()).c_str());
+                             status.error_message().c_str());
         return kTfLiteError;
       },
       nullptr,                // .profiling_string

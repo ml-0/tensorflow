@@ -125,7 +125,8 @@ def iteration_inside_func(initial_weights, dataset, optimizer_fn,
       if iteration_type == 'dataset':
         for x in dist_input:
           if strategy:
-            per_replica_losses = strategy.run(step_fn, args=(x,))
+            per_replica_losses = strategy.experimental_run_v2(step_fn,
+                                                              args=(x,))
             total_loss += strategy.reduce(reduce_util.ReduceOp.SUM,
                                           per_replica_losses,
                                           axis=None)
@@ -136,7 +137,8 @@ def iteration_inside_func(initial_weights, dataset, optimizer_fn,
         iterator = iter(dist_input)
         for _ in range(_STEPS_PER_EPOCH):
           if strategy:
-            per_replica_losses = strategy.run(step_fn, args=(next(iterator),))
+            per_replica_losses = strategy.experimental_run_v2(
+                step_fn, args=(next(iterator),))
             total_loss += strategy.reduce(reduce_util.ReduceOp.SUM,
                                           per_replica_losses,
                                           axis=None)
@@ -182,7 +184,8 @@ def iteration_outside_func(initial_weights, dataset, optimizer_fn,
         return loss
 
       if strategy:
-        per_replica_losses = strategy.run(step_fn, args=(dist_inputs,))
+        per_replica_losses = strategy.experimental_run_v2(
+            step_fn, args=(dist_inputs,))
         return strategy.reduce(reduce_util.ReduceOp.SUM,
                                per_replica_losses,
                                axis=None)

@@ -53,10 +53,27 @@ from tensorflow.python.ops import resource_variable_ops
 from tensorflow.python.tpu import device_assignment as device_assignment_lib  # pylint: disable=unused-import
 from tensorflow.python.tpu import tpu
 from tensorflow.python.tpu import tpu_strategy_util
+from tensorflow.python.tpu import tpu_system_metadata as tpu_system_metadata_lib
 from tensorflow.python.tpu import training_loop
 from tensorflow.python.tpu.ops import tpu_ops
 from tensorflow.python.util import nest
 from tensorflow.python.util.tf_export import tf_export
+
+
+def get_tpu_system_metadata(tpu_cluster_resolver):
+  """Retrieves TPU system metadata given a TPUClusterResolver."""
+  master = tpu_cluster_resolver.master()
+
+  # pylint: disable=protected-access
+  cluster_spec = tpu_cluster_resolver.cluster_spec()
+  cluster_def = cluster_spec.as_cluster_def() if cluster_spec else None
+  tpu_system_metadata = (
+      tpu_system_metadata_lib._query_tpu_system_metadata(
+          master,
+          cluster_def=cluster_def,
+          query_topology=False))
+
+  return tpu_system_metadata
 
 
 @contextlib.contextmanager
@@ -68,28 +85,28 @@ def maybe_init_scope():
       yield
 
 
-def validate_run_function(fn):
-  """Validate the function passed into strategy.run."""
+def validate_experimental_run_function(fn):
+  """Validate the function passed into strategy.experimental_run_v2."""
 
   # We allow three types of functions/objects passed into TPUStrategy
-  # run in eager mode:
+  # experimental_run_v2 in eager mode:
   #   1. a user annotated tf.function
   #   2. a ConcreteFunction, this is mostly what you get from loading a saved
   #      model.
   #   3. a callable object and the `__call__` method itself is a tf.function.
   #
   # Otherwise we return an error, because we don't support eagerly running
-  # run in TPUStrategy.
+  # experimental_run_v2 in TPUStrategy.
 
-  if context.executing_eagerly() \
-      and not isinstance(fn, def_function.Function) \
-      and not isinstance(fn, function.ConcreteFunction) \
-      and not (callable(fn) and isinstance(fn.__call__, def_function.Function)):
+  if context.executing_eagerly() and not isinstance(
+      fn, def_function.Function) and not isinstance(
+          fn, function.ConcreteFunction) and not (callable(fn) and isinstance(
+              fn.__call__, def_function.Function)):
     raise NotImplementedError(
-        "TPUStrategy.run(fn, ...) does not support pure eager "
+        "TPUStrategy.experimental_run_v2(fn, ...) does not support pure eager "
         "execution. please make sure the function passed into "
-        "`strategy.run` is a `tf.function` or "
-        "`strategy.run` is called inside a `tf.function` if "
+        "`strategy.experimental_run_v2` is a `tf.function` or "
+        "`strategy.experimental_run_v2` is called inside a `tf.function` if "
         "eager behavior is enabled.")
 
 
@@ -118,10 +135,10 @@ class TPUStrategy(distribute_lib.Strategy):
 
     To run TF2 programs on TPUs, you can either use `.compile` and
     `.fit` APIs in `tf.keras` with TPUStrategy, or write your own customized
-    training loop by calling `strategy.run` directly. Note that
+    training loop by calling `strategy.experimental_run_v2` directly. Note that
     TPUStrategy doesn't support pure eager execution, so please make sure the
-    function passed into `strategy.run` is a `tf.function` or
-    `strategy.run` is called inside a `tf.function` if eager
+    function passed into `strategy.experimental_run_v2` is a `tf.function` or
+    `strategy.experimental_run_v2` is called inside a `tf.function` if eager
     behavior is enabled.
 
     Args:
@@ -142,9 +159,9 @@ class TPUStrategy(distribute_lib.Strategy):
   # TODO(cjfj): Modify `_call_for_each_replica` in `TPUExtended` such that this
   # can use the default implementation.
   # This implementation runs a single step. It does not use infeed or outfeed.
-  def run(self, fn, args=(), kwargs=None, options=None):
+  def experimental_run_v2(self, fn, args=(), kwargs=None, options=None):
     """See base class."""
-    validate_run_function(fn)
+    validate_experimental_run_function(fn)
 
     # Note: the target function is converted to graph even when in Eager mode,
     # so autograph is on by default here.
@@ -191,7 +208,7 @@ class TPUStrategyV1(distribute_lib.StrategyV1):
   # TODO(cjfj): Modify `_call_for_each_replica` in `TPUExtended` such that this
   # can use the default implementation.
   # This implementation runs a single step. It does not use infeed or outfeed.
-  def run(self, fn, args=(), kwargs=None, options=None):
+  def experimental_run_v2(self, fn, args=(), kwargs=None, options=None):
     """Run `fn` on each replica, with the given arguments.
 
     Executes ops specified by `fn` on each replica. If `args` or `kwargs` have
@@ -206,7 +223,7 @@ class TPUStrategyV1(distribute_lib.StrategyV1):
     per-replica objects containing tensors or composite tensors.
 
     Users can pass strategy specific options to `options` argument. An example
-    to enable bucketizing dynamic shapes in `TPUStrategy.run`
+    to enable bucketizing dynamic shapes in `TPUStrategy.experimental_run_v2`
     is:
     ```python
 
@@ -225,7 +242,7 @@ class TPUStrategyV1(distribute_lib.StrategyV1):
       output = tf.reduce_sum(inputs)
       return output
 
-      strategy.run(step_fn, args=(next(iterator),),
+      strategy.experimental_run_v2(step_fn, args=(next(iterator),),
                                    options=options)
     ```
 
@@ -242,7 +259,7 @@ class TPUStrategyV1(distribute_lib.StrategyV1):
       structure can either be "per-replica" `Tensor` objects or `Tensor`s
       (for example, if running on a single replica).
     """
-    validate_run_function(fn)
+    validate_experimental_run_function(fn)
 
     fn = autograph.tf_convert(fn, autograph_ctx.control_status_ctx())
     options = options or distribute_lib.RunOptions()
@@ -270,7 +287,7 @@ class TPUExtended(distribute_lib.StrategyExtendedV1):
 
     self._tpu_function_cache = weakref.WeakKeyDictionary()
     self._tpu_cluster_resolver = tpu_cluster_resolver
-    self._tpu_metadata = self._tpu_cluster_resolver.get_tpu_system_metadata()
+    self._tpu_metadata = get_tpu_system_metadata(self._tpu_cluster_resolver)
     self._device_assignment = device_assignment
 
     tpu_devices_flat = [
@@ -414,14 +431,6 @@ class TPUExtended(distribute_lib.StrategyExtendedV1):
         input_contexts,
         self._container_strategy())
 
-  def _experimental_distribute_values_from_function(self, value_fn):
-    per_replica_values = []
-    for replica_id in range(self._num_replicas_in_sync):
-      per_replica_values.append(
-          value_fn(distribute_lib.ValueContext(replica_id,
-                                               self._num_replicas_in_sync)))
-    return values.regroup(per_replica_values, always_wrap=True)
-
   # TODO(priyag): Deal with OutOfRange errors once b/111349762 is fixed.
   # TODO(sourabhbajaj): Remove the initial_loop_values parameter when we have
   # a mechanism to infer the outputs of `fn`. Pending b/110550782.
@@ -553,8 +562,7 @@ class TPUExtended(distribute_lib.StrategyExtendedV1):
                        "logical device id {} but there are only total of {} "
                        "logical devices in replica.".format(
                            logical_device_id, num_logical_devices_per_replica))
-    return xla_sharding.assign_device(
-        tensor, logical_device_id, use_sharding_op=True)
+    return xla_sharding.assign_device(tensor, logical_device_id)
 
   def _experimental_split_to_logical_devices(self, tensor,
                                              partition_dimensions):

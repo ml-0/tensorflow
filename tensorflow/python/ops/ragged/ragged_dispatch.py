@@ -136,16 +136,18 @@ class UnaryRaggedElementwiseDispatcher(dispatch.OpDispatcher):
             if ragged_tensor.is_ragged(elt) else elt for elt in x
         ]
         x = ragged_tensor.match_row_splits_dtypes(*x)
-        ragged_elts = [elt for elt in x if ragged_tensor.is_ragged(elt)]
-        nested_splits_lists = [elt.nested_row_splits for elt in ragged_elts]
+        nested_splits_lists = [
+            elt.nested_row_splits for elt in x if ragged_tensor.is_ragged(elt)
+        ]
         flat_values = [
             elt.flat_values if ragged_tensor.is_ragged(elt) else elt
             for elt in x
         ]
         with ops.control_dependencies(
             ragged_util.assert_splits_match(nested_splits_lists)):
-          return ragged_elts[0].with_flat_values(
-              self._original_op(flat_values, *args, **kwargs))
+          return ragged_tensor.RaggedTensor.from_nested_row_splits(
+              self._original_op(flat_values, *args, **kwargs),
+              nested_splits_lists[0], validate=False)
       else:
         return self.NOT_SUPPORTED
     else:

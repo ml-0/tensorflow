@@ -863,12 +863,6 @@ struct DequantizationParams {
   int32 zero_point;
 };
 
-struct PerChannelDequantizationParams {
-  const float* scale;
-  const int32* zero_point;
-  int32 quantized_dimension;
-};
-
 struct FakeQuantParams {
   MinMax minmax;
   int32 num_bits;
@@ -1088,11 +1082,10 @@ struct UnpackParams {
 struct LeakyReluParams {
   float alpha;
   int32 input_offset;
+  int32 alpha_offset;
   int32 output_offset;
-  int32 output_multiplier_alpha;
-  int32 output_shift_alpha;
-  int32 output_multiplier_identity;
-  int32 output_shift_identity;
+  int32 output_multiplier;
+  int output_shift;
 };
 
 template <typename P>

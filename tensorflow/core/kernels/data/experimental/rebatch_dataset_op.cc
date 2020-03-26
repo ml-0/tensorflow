@@ -62,8 +62,7 @@ class RebatchDatasetOp : public UnaryDatasetOpKernel {
           output_types_(output_types),
           output_shapes_(output_shapes),
           traceme_metadata_(
-              {{"num_replicas", strings::Printf("%lld", static_cast<long long>(
-                                                            num_replicas))}}) {
+              {{"num_replicas", strings::Printf("%lld", num_replicas)}}) {
       input_->Ref();
     }
 
@@ -179,14 +178,13 @@ class RebatchDatasetOp : public UnaryDatasetOpKernel {
       }
 
      protected:
-      Status SaveInternal(SerializationContext* ctx,
-                          IteratorStateWriter* writer) override {
+      Status SaveInternal(IteratorStateWriter* writer) override {
         mutex_lock l(mu_);
         if (!input_impl_) {
           TF_RETURN_IF_ERROR(
               writer->WriteScalar(full_name("input_impl_empty"), ""));
         } else {
-          TF_RETURN_IF_ERROR(SaveInput(ctx, writer, input_impl_));
+          TF_RETURN_IF_ERROR(SaveInput(writer, input_impl_));
         }
         TF_RETURN_IF_ERROR(
             writer->WriteScalar(full_name("slice_number"), slice_number_));
@@ -251,8 +249,8 @@ class RebatchDatasetOp : public UnaryDatasetOpKernel {
 
       mutex mu_;
       std::unique_ptr<IteratorBase> input_impl_;
-      std::vector<InputDescriptor> input_descriptors_ TF_GUARDED_BY(mu_);
-      int64 slice_number_ TF_GUARDED_BY(mu_) = 0;
+      std::vector<InputDescriptor> input_descriptors_ GUARDED_BY(mu_);
+      int64 slice_number_ GUARDED_BY(mu_) = 0;
     };
 
     const DatasetBase* const input_;

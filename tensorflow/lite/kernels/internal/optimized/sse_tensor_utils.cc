@@ -22,8 +22,6 @@ limitations under the License.
 #include <smmintrin.h>  // SSE4.1
 #endif
 
-#include <cstdint>
-
 #include "tensorflow/lite/kernels/internal/compatibility.h"
 
 namespace tflite {
@@ -93,17 +91,17 @@ void SseMatrixBatchVectorMultiplyAccumulate(
     const int8_t* __restrict__ matrix, const int m_rows, const int m_cols,
     const int8_t* __restrict__ vectors,
     const float* __restrict__ scaling_factors, int n_batch,
-    float* __restrict__ result) {
-  for (std::intptr_t batch = 0; batch < n_batch; ++batch) {
+    float* __restrict__ result, int result_stride) {
+  for (int batch = 0; batch < n_batch; ++batch) {
     const float batch_scaling_factor = scaling_factors[batch];
     // Compute dot-product for every column.
-    for (std::intptr_t row = 0; row < m_rows; ++row) {
+    for (int row = 0; row < m_rows; ++row, result += result_stride) {
       // Get the address of the first element of the row.
       const int8_t* __restrict__ row_ptr = matrix + row * m_cols;
 
       // Initialize the dot product sum for the row to 0.
       __m128i dotprod_32x4 = _mm_setzero_si128();
-      std::intptr_t col = 0;
+      int col = 0;
       // For every block of 16x 8-bit inputs.
       while (col < (m_cols & ~15)) {
         const __m128i vec_8x16 =
@@ -154,7 +152,6 @@ void SseMatrixBatchVectorMultiplyAccumulate(
       }  // for col
 
       *result += sum * batch_scaling_factor;
-      ++result;
     }  // for row
 
     vectors += m_cols;
@@ -165,12 +162,13 @@ void SseMatrixBatchVectorMultiplyAccumulate(
     const int8_t* __restrict__ matrix, const int m_rows, const int m_cols,
     const int8_t* __restrict__ vectors,
     const float* __restrict__ scaling_factors, int n_batch,
-    float* __restrict__ result, const float* __restrict__ per_channel_scale,
+    float* __restrict__ result, int result_stride,
+    const float* __restrict__ per_channel_scale,
     const int32_t* __restrict__ input_offset) {
-  static constexpr std::intptr_t kBlockSize = 16;
-  for (std::intptr_t batch = 0; batch < n_batch; ++batch) {
+  static constexpr int kBlockSize = 16;
+  for (int batch = 0; batch < n_batch; ++batch) {
     const float batch_scaling_factor = scaling_factors[batch];
-    for (std::intptr_t row = 0; row < m_rows; ++row) {
+    for (int row = 0; row < m_rows; ++row, result += result_stride) {
       const int8_t* __restrict__ row_ptr = matrix + row * m_cols;
       float scale = batch_scaling_factor;
       if (per_channel_scale != nullptr) {
@@ -178,7 +176,7 @@ void SseMatrixBatchVectorMultiplyAccumulate(
       }
       __m128i dotprod_32x4 = _mm_setzero_si128();
       __m128i row_sum_16x8 = _mm_setzero_si128();
-      std::intptr_t col = 0;
+      int col = 0;
       for (; col < (m_cols & ~(kBlockSize - 1)); col += kBlockSize) {
         const __m128i vec_8x16 =
             _mm_loadu_si128(reinterpret_cast<const __m128i*>(vectors + col));
@@ -206,7 +204,6 @@ void SseMatrixBatchVectorMultiplyAccumulate(
       }  // for col
       sum -= row_sum * input_offset[batch];
       *result += sum * scale;
-      ++result;
     }  // for row
     vectors += m_cols;
   }  // for batch
@@ -219,15 +216,15 @@ inline void SseSparseMatrixVectorMultiplyAccumulate(
     const int8_t* __restrict__ matrix, const uint8_t* __restrict__ ledger,
     const int m_rows, const int m_cols, const int8_t* __restrict__ vector,
     const float scaling_factor, float* __restrict__ result) {
-  static const std::intptr_t kBlockSize = 16;
+  static const int kBlockSize = 16;
   TFLITE_DCHECK_EQ(m_cols % kBlockSize, 0);
   const uint8_t* __restrict__ ledger_ptr = ledger;
-  for (std::intptr_t row = 0; row < m_rows; ++row) {
+  for (int row = 0; row < m_rows; ++row) {
     // Initialize the dot product sum for the row to 0.
     __m128i dotprod_32x4 = _mm_setzero_si128();
-    std::intptr_t num_nonzero_blocks = *ledger_ptr++;
-    for (std::intptr_t i = 0; i < num_nonzero_blocks; i++) {
-      const std::intptr_t col_index = *ledger_ptr++ * kBlockSize;
+    int num_nonzero_blocks = *ledger_ptr++;
+    for (int i = 0; i < num_nonzero_blocks; i++) {
+      const int col_index = *ledger_ptr++ * kBlockSize;
       const __m128i vec_8x16 =
           _mm_loadu_si128(reinterpret_cast<const __m128i*>(vector + col_index));
       const __m128i row_8x16 =
@@ -253,7 +250,7 @@ inline void SseSparseMatrix4VectorsMultiplyAccumulate(
     const int m_rows, const int m_cols,
     const int8_t* __restrict__ const vectors, const __m128 scaling_factors_fx4,
     float* __restrict__ const results) {
-  static const std::intptr_t kBlockSize = 16;
+  static const int kBlockSize = 16;
   TFLITE_DCHECK_EQ(m_cols % kBlockSize, 0);
 
   const int8_t* __restrict__ vector0 = vectors + 0 * m_cols;
@@ -265,16 +262,16 @@ inline void SseSparseMatrix4VectorsMultiplyAccumulate(
   float* __restrict__ result2 = results + 2 * m_rows;
   float* __restrict__ result3 = results + 3 * m_rows;
 
-  for (std::intptr_t row = 0; row < m_rows; ++row) {
+  for (int row = 0; row < m_rows; ++row) {
     // Initialize the dot product sum for the row to 0.
     __m128i dp0_32x4 = _mm_setzero_si128();
     __m128i dp1_32x4 = _mm_setzero_si128();
     __m128i dp2_32x4 = _mm_setzero_si128();
     __m128i dp3_32x4 = _mm_setzero_si128();
 
-    std::intptr_t num_nonzero_blocks = *ledger++;
-    for (std::intptr_t i = 0; i < num_nonzero_blocks; i++) {
-      const std::intptr_t col_index = *ledger++ * kBlockSize;
+    int num_nonzero_blocks = *ledger++;
+    for (int i = 0; i < num_nonzero_blocks; i++) {
+      const int col_index = *ledger++ * kBlockSize;
       // vecN are for different batches
       const __m128i vec0_8x16 = _mm_loadu_si128(
           reinterpret_cast<const __m128i*>(vector0 + col_index));

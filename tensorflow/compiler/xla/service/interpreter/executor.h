@@ -130,19 +130,19 @@ class XlaInterpreterExecutor : public internal::StreamExecutorInterface {
                     std::function<port::Status()> callback) override;
 
   port::Status AllocateEvent(Event *event) override {
-    return port::Status::OK();
+    return port::Status{port::error::UNIMPLEMENTED, ""};
   }
 
   port::Status DeallocateEvent(Event *event) override {
-    return port::Status::OK();
+    return port::Status{port::error::UNIMPLEMENTED, ""};
   }
 
   port::Status RecordEvent(Stream *stream, Event *event) override {
-    return port::Status{port::error::UNIMPLEMENTED, "RecordEvent"};
+    return port::Status{port::error::UNIMPLEMENTED, ""};
   }
 
   port::Status WaitForEvent(Stream *stream, Event *event) override {
-    return port::Status{port::error::UNIMPLEMENTED, "WaitForEvent"};
+    return port::Status{port::error::UNIMPLEMENTED, ""};
   }
 
   Event::Status PollForEventStatus(Event *event) override {

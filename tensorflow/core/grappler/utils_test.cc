@@ -423,10 +423,10 @@ TEST(IsKernelRegisteredForNode, All) {
   v.set_type(DataType::DT_FLOAT);
   (*node.mutable_attr())["T"] = v;
   TF_EXPECT_OK(IsKernelRegisteredForNode(node));
-#if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#ifdef GOOGLE_CUDA
   node.set_device("/gpu:0");
   TF_EXPECT_OK(IsKernelRegisteredForNode(node));
-#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#endif  // GOOGLE_CUDA
 
   // Bad device name.
   node.set_device("");

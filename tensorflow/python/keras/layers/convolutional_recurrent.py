@@ -330,10 +330,9 @@ class ConvRNN2D(RNN):
                                          mask=mask,
                                          input_length=timesteps)
     if self.stateful:
-      updates = [
-          K.update(self_state, state)
-          for self_state, state in zip(self.states, states)
-      ]
+      updates = []
+      for i in range(len(states)):
+        updates.append(K.update(self.states[i], states[i]))
       self.add_update(updates)
 
     if self.return_sequences:

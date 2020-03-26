@@ -4811,17 +4811,17 @@ class PadV2OpConstModel : public PadOpModel<T1> {
 };
 
 // Test case where paddings is a non-const tensor.
-template <typename RegularInputOutput>
-class PadV2OpDynamicModel : public PadOpModel<RegularInputOutput> {
+template <typename RegularInputOuput>
+class PadV2OpDynamicModel : public PadOpModel<RegularInputOuput> {
  public:
   PadV2OpDynamicModel(const TensorData& input,
                       std::initializer_list<int> paddings_shape,
-                      RegularInputOutput constant_values,
+                      RegularInputOuput constant_values,
                       const TensorData& output) {
     this->input_ = this->AddInput(input);
     this->paddings_ = this->AddInput(TensorType_INT32);
     this->constant_values_ = this->AddConstInput(
-        GetTensorType<RegularInputOutput>(), {constant_values}, {1});
+        GetTensorType<RegularInputOuput>(), {constant_values}, {1});
     this->output_ = this->AddOutput(output);
 
     this->SetBuiltinOp(BuiltinOperator_PADV2, BuiltinOptions_PadV2Options,

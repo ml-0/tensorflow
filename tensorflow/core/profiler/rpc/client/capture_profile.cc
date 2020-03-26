@@ -14,6 +14,8 @@ limitations under the License.
 ==============================================================================*/
 #include "tensorflow/core/profiler/rpc/client/capture_profile.h"
 
+#include <cstdio>
+#include <ctime>
 #include <vector>
 
 #include "grpcpp/grpcpp.h"
@@ -35,6 +37,14 @@ namespace {
 
 constexpr uint64 kMaxEvents = 1000000;
 
+string GetCurrentTimeStampAsString() {
+  char s[128];
+  std::time_t t = std::time(nullptr);
+  auto result = std::strftime(s, sizeof(s), "%F_%T", std::localtime(&t));
+  DCHECK_NE(result, 0);
+  return s;
+}
+
 ProfileRequest PopulateProfileRequest(int duration_ms,
                                       const string& repository_root,
                                       const string& session_id,
@@ -42,9 +52,12 @@ ProfileRequest PopulateProfileRequest(int duration_ms,
   ProfileRequest request;
   request.set_duration_ms(duration_ms);
   request.set_max_events(kMaxEvents);
-  request.set_repository_root(repository_root);
-  request.set_session_id(session_id);
-  request.add_tools("trace_viewer");
+  if (absl::StartsWith(repository_root, "gs://")) {
+    // For backward compatibilities, only generate tracetable etc when the
+    // user provide a GCS path for model directory.
+    request.set_repository_root(repository_root);
+    request.set_session_id(session_id);
+  }
   request.add_tools("op_profile");
   request.add_tools("input_pipeline");
   request.add_tools("kernel_stats");
@@ -80,12 +93,11 @@ Status Profile(const string& service_addr, const string& logdir,
                const ProfileOptions& opts) {
   ProfileRequest request =
       PopulateProfileRequest(duration_ms, logdir, session_id, opts);
-  std::vector<string> parts = absl::StrSplit(service_addr, ':');
-  request.set_host_name(parts[0]);
 
   ::grpc::ClientContext context;
   ::grpc::ChannelArguments channel_args;
   // TODO(qiuminxu): use `NewHostPortGrpcChannel` instead once their
+  // `ValidateHostPortPair` checks for empty host string case.
   channel_args.SetInt(GRPC_ARG_MAX_MESSAGE_LENGTH,
                       std::numeric_limits<int32>::max());
   std::unique_ptr<grpc::ProfilerService::Stub> stub =
@@ -96,9 +108,9 @@ Status Profile(const string& service_addr, const string& logdir,
   TF_RETURN_IF_ERROR(
       FromGrpcStatus(stub->Profile(&context, request, &response)));
 
-  if (!response.empty_trace()) {
-    TF_RETURN_IF_ERROR(SaveTensorboardProfile(
-        logdir, session_id, request.host_name(), response, &std::cout));
+  if (!response.encoded_trace().empty()) {
+    TF_CHECK_OK(
+        SaveTensorboardProfile(logdir, session_id, "", response, &std::cout));
     // Print this at the end so that it's not buried in irrelevant LOG messages.
     std::cout
         << "NOTE: using the trace duration " << duration_ms << "ms.\n"
@@ -108,7 +120,7 @@ Status Profile(const string& service_addr, const string& logdir,
         << std::endl;
   }
 
-  if (response.empty_trace()) {
+  if (response.encoded_trace().empty()) {
     return Status(error::Code::UNAVAILABLE, "No trace event is collected");
   }
   return Status::OK();
@@ -132,6 +144,7 @@ Status NewSession(const string& service_addr, const string& repository_root,
   ::grpc::ClientContext context;
   ::grpc::ChannelArguments channel_args;
   // TODO(qiuminxu): use `NewHostPortGrpcChannel` instead once their
+  // `ValidateHostPortPair` checks for empty host string case.
   channel_args.SetMaxReceiveMessageSize(std::numeric_limits<int32>::max());
   // TODO(jiesun): GRPC support following relevant naming scheme:
   // 1. dns:///host:port

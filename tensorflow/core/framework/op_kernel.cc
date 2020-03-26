@@ -37,7 +37,6 @@ limitations under the License.
 #include "tensorflow/core/framework/node_def_util.h"
 #include "tensorflow/core/framework/node_properties.h"
 #include "tensorflow/core/framework/op_def_util.h"
-#include "tensorflow/core/framework/tensor_reference.h"
 #include "tensorflow/core/framework/types.h"
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/lib/core/notification.h"
@@ -105,7 +104,8 @@ OpKernel::OpKernel(OpKernelConstruction* context, bool is_deferred)
       name_view_(props_->node_def.name()),
       type_string_view_(props_->node_def.op()),
       graph_def_version_(context->graph_def_version()),
-      is_deferred_(is_deferred) {
+      is_deferred_(is_deferred),
+      cost_estimate_(OpKernel::kInitialCostEstimateCycles) {
   OP_REQUIRES_OK(context,
                  NameRangesForNode(props_->node_def, *props_->op_def,
                                    &input_name_map_, &output_name_map_));
@@ -132,7 +132,8 @@ OpKernel::OpKernel(OpKernelConstruction* context, NodeDef&& custom_def,
       name_view_(props_->node_def.name()),
       type_string_view_(props_->node_def.op()),
       graph_def_version_(context->graph_def_version()),
-      is_deferred_(is_deferred) {
+      is_deferred_(is_deferred),
+      cost_estimate_(OpKernel::kInitialCostEstimateCycles) {
   OP_REQUIRES_OK(context,
                  NameRangesForNode(props_->node_def, *props_->op_def,
                                    &input_name_map_, &output_name_map_));
@@ -146,6 +147,11 @@ OpKernel::OpKernel(OpKernelConstruction* context, NodeDef&& custom_def,
 }
 
 OpKernel::~OpKernel() {}
+
+const uint64 OpKernel::kInitialCostEstimateCycles;
+const uint64 OpKernel::kOpIsExpensiveThresholdCycles;
+const uint64 OpKernel::kCostDecay;
+
 
 Status OpKernel::InputRange(StringPiece input_name, int* start,
                             int* stop) const {
@@ -216,6 +222,7 @@ Tensor* PersistentTensor::AccessTensor(OpKernelConstruction* context) {
 }
 
 Tensor* PersistentTensor::AccessTensor(OpKernelContext* context) {
+  context->NotifyUseOfPersistentTensor(tensor_);
   return &tensor_;
 }
 
@@ -324,7 +331,7 @@ OpKernelContext::OpKernelContext(Params* params)
 
 OpKernelContext::OpKernelContext(Params* params, int num_outputs)
     : params_(params), outputs_(num_outputs) {
-  if (params_->track_allocations) {
+  if (params_->record_tensor_accesses || params_->track_allocations) {
     tracking_state_ = absl::make_unique<TrackingState>();
   }
 
@@ -386,6 +393,13 @@ void OpKernelContext::SetStatus(const Status& status) {
   status_.Update(status);
 }
 
+void OpKernelContext::really_record_tensor_reference(const Tensor& tensor) {
+  DCHECK(tracking_state_);
+  mutex_lock l(tracking_state_->mu);
+  // Keep a reference to the underlying memory around.
+  tracking_state_->referenced_tensors.Add(tensor);
+}
+
 Status OpKernelContext::input(StringPiece name, const Tensor** tensor) {
   int start, stop;
   TF_RETURN_IF_ERROR(params_->op_kernel->InputRange(name, &start, &stop));
@@ -400,6 +414,7 @@ Status OpKernelContext::input(StringPiece name, const Tensor** tensor) {
                                    "' when non-ref input was expected");
   }
   *tensor = (*params_->inputs)[start].tensor;
+  record_tensor_reference(**tensor);
   return Status::OK();
 }
 
@@ -434,6 +449,7 @@ const Tensor& OpKernelContext::input(int index) {
   CHECK_LT(index, num_inputs()) << " name: " << op_kernel().name();
   CHECK(!input_is_ref(index));
   const Tensor& tensor = *((*params_->inputs)[index].tensor);
+  record_tensor_reference(tensor);
   return tensor;
 }
 
@@ -444,10 +460,12 @@ Tensor OpKernelContext::mutable_input(int index, bool lock_held) {
   // return a copy of the Ref acquired while holding the mutex
   if (lock_held) {
     Tensor& tensor = *((*params_->inputs)[index].tensor);
+    record_tensor_reference(tensor);
     return tensor;
   } else {
     tf_shared_lock l(*input_ref_mutex(index));
     Tensor& tensor = *((*params_->inputs)[index].tensor);
+    record_tensor_reference(tensor);
     return tensor;
   }
 }
@@ -464,6 +482,7 @@ void OpKernelContext::replace_ref_input(int index, const Tensor& tensor,
     mutex_lock l(*input_ref_mutex(index));
     *(*params_->inputs)[index].tensor = tensor;
   }
+  record_tensor_reference(tensor);
 }
 
 void OpKernelContext::forward_ref_input_to_ref_output(int input_index,
@@ -639,6 +658,7 @@ Status OpKernelContext::mutable_input(StringPiece name, Tensor* tensor,
     tf_shared_lock l(*input_ref_mutex(start));
     *tensor = *(*params_->inputs)[start].tensor;
   }
+  record_tensor_reference(*tensor);
   return Status::OK();
 }
 
@@ -744,8 +764,8 @@ Status OpKernelContext::allocate_tensor(
     DataType type, const TensorShape& shape, Tensor* out_tensor,
     AllocatorAttributes attr, const AllocationAttributes& allocation_attr) {
   Allocator* a = get_allocator(attr);
-  auto op_annotation =
-      ScopedMemoryDebugAnnotation(op_kernel().name_view().data(), step_id());
+  MEMDEBUG_CACHE_OP(op_kernel().name().c_str());
+  MEMDEBUG_CACHE_STEPID(step_id());
   Tensor new_tensor(a, type, shape,
                     AllocationAttributes(allocation_attr.no_retry_on_failure,
                                          /* allocation_will_be_logged= */ true,
@@ -761,6 +781,7 @@ Status OpKernelContext::allocate_tensor(
     LogMemory::RecordTensorAllocation(params_->op_kernel->name(),
                                       params_->step_id, new_tensor);
   }
+  record_tensor_reference(new_tensor);
   *out_tensor = std::move(new_tensor);
   return Status::OK();
 }
@@ -948,6 +969,7 @@ void OpKernelContext::set_output(int index, const Tensor& tensor) {
   } else {
     // Input can be forwarded to output; incref on `tensor` and set output at
     // `index` to this tensor.
+    record_tensor_reference(tensor);
     outputs_[index] = TensorValue(new Tensor(tensor));
     if (track_allocations() && tensor.TotalBytes() > 0) {
       DCHECK(tracking_state_);
@@ -972,6 +994,7 @@ void OpKernelContext::set_output_ref(int index, mutex* mu,
   CHECK_GE(index, 0);
   CHECK_LT(index, outputs_.size());
   CHECK(IsRefType(params_->op_kernel->output_type(index)));
+  record_tensor_reference(*tensor_for_ref);
   outputs_[index] = TensorValue(mu, tensor_for_ref);
 }
 
@@ -1111,8 +1134,7 @@ struct KernelRegistration {
 // KernelDef.
 struct KernelRegistry {
   mutex mu;
-  std::unordered_multimap<string, KernelRegistration> registry
-      TF_GUARDED_BY(mu);
+  std::unordered_multimap<string, KernelRegistration> registry GUARDED_BY(mu);
 };
 
 #if defined(_WIN32)
@@ -1734,7 +1756,7 @@ void OpKernelContext::CtxFailureWithWarning(const char* file, int line,
 
 void CheckNotInComputeAsync(OpKernelContext* ctx,
                             const char* correct_macro_name) {
-  CHECK_EQ(nullptr, ctx->params_->op_kernel->AsAsync())
+  CHECK_EQ(nullptr, ctx->op_kernel().AsAsync())
       << "Use " << correct_macro_name << " in AsyncOpKernel implementations.";
 }
 

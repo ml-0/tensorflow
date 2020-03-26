@@ -31,9 +31,7 @@ ifeq ($(TARGET), riscv32_mcu)
     -Wno-unused-parameter \
     -Wno-write-strings \
     -fno-delete-null-pointer-checks \
-    -fno-threadsafe-statics \
     -fomit-frame-pointer \
-    -fno-use-cxa-atexit \
     -Os
 
   CXXFLAGS += $(PLATFORM_FLAGS) \

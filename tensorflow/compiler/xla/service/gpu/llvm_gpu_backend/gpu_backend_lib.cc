@@ -32,7 +32,7 @@ limitations under the License.
 #include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/Bitcode/BitcodeReader.h"
 #include "llvm/Bitcode/BitcodeWriter.h"
-#include "llvm/CodeGen/CommandFlags.h"
+#include "llvm/CodeGen/CommandFlags.inc"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/Module.h"
@@ -68,8 +68,6 @@ limitations under the License.
 namespace xla {
 namespace gpu {
 namespace {
-
-static llvm::codegen::RegisterCodeGenFlags CGF;
 
 // Inline threshold value to use in LLVM AMDGPU backend.
 const int kAMDGPUInlineThreshold = 0x100000;
@@ -131,41 +129,38 @@ std::unique_ptr<llvm::TargetMachine> GetTargetMachine(
     llvm::Triple triple, absl::string_view cpu_name,
     const HloModuleConfig& hlo_module_config, absl::string_view feature_str) {
   std::string error;
-  const llvm::Target* target =
-      llvm::TargetRegistry::lookupTarget("", triple, error);
+  const llvm::Target* target = TargetRegistry::lookupTarget("", triple, error);
   if (target == nullptr) {
     LOG(FATAL) << "Unable to find Target for triple '" << triple.str() << "'"
                << " -- " << error;
     return nullptr;
   }
 
-  llvm::TargetOptions target_options =
-      llvm::codegen::InitTargetOptionsFromCodeGenFlags();
+  TargetOptions target_options = InitTargetOptionsFromCodeGenFlags();
 
   // Set the verbose assembly options.
   target_options.MCOptions.AsmVerbose = false;
 
   // The selection of codegen optimization level is copied from function
   // GetCodeGenOptLevel in //third_party/llvm/llvm/tools/opt/opt.cpp.
-  llvm::CodeGenOpt::Level codegen_opt_level;
+  CodeGenOpt::Level codegen_opt_level;
   switch (hlo_module_config.debug_options().xla_backend_optimization_level()) {
     case 1:
-      codegen_opt_level = llvm::CodeGenOpt::Less;
+      codegen_opt_level = CodeGenOpt::Less;
       break;
     case 2:
-      codegen_opt_level = llvm::CodeGenOpt::Default;
+      codegen_opt_level = CodeGenOpt::Default;
       break;
     case 3:
-      codegen_opt_level = llvm::CodeGenOpt::Aggressive;
+      codegen_opt_level = CodeGenOpt::Aggressive;
       break;
     default:
-      codegen_opt_level = llvm::CodeGenOpt::None;
+      codegen_opt_level = CodeGenOpt::None;
   }
   return absl::WrapUnique(target->createTargetMachine(
       triple.str(), llvm_ir::AsStringRef(cpu_name),
-      llvm_ir::AsStringRef(feature_str), target_options,
-      llvm::codegen::getExplicitRelocModel(),
-      llvm::codegen::getExplicitCodeModel(), codegen_opt_level));
+      llvm_ir::AsStringRef(feature_str), target_options, getRelocModel(),
+      getCodeModel(), codegen_opt_level));
 }
 
 // Adds the standard LLVM optimization passes, based on the speed optimization
@@ -177,7 +172,7 @@ void AddOptimizationPasses(unsigned opt_level, unsigned size_level,
                            llvm::legacy::PassManagerBase* module_passes,
                            llvm::legacy::FunctionPassManager* function_passes,
                            int inline_threshold) {
-  llvm::PassManagerBuilder builder;
+  PassManagerBuilder builder;
   builder.OptLevel = opt_level;
   builder.SizeLevel = size_level;
 
@@ -200,7 +195,7 @@ void AddOptimizationPasses(unsigned opt_level, unsigned size_level,
 }
 
 // Emits the given module to a bit code file.
-void EmitBitcodeToFile(const llvm::Module& module, absl::string_view filename) {
+void EmitBitcodeToFile(const Module& module, absl::string_view filename) {
   std::error_code error_code;
   llvm::ToolOutputFile outfile(string(filename).c_str(), error_code,
                                llvm::sys::fs::F_None);
@@ -214,8 +209,7 @@ void EmitBitcodeToFile(const llvm::Module& module, absl::string_view filename) {
 
 // Emits the given module to PTX. target_machine is an initialized TargetMachine
 // for the NVPTX target.
-string EmitModuleToPTX(llvm::Module* module,
-                       llvm::TargetMachine* target_machine) {
+string EmitModuleToPTX(Module* module, llvm::TargetMachine* target_machine) {
   std::string ptx;  // need a std::string instead of a ::string.
   {
     llvm::raw_string_ostream stream(ptx);
@@ -283,8 +277,8 @@ Status LinkWithBitcodeVector(llvm::Module* module,
         LoadIRModule(bitcode_path, &module->getContext());
     if (linker.linkInModule(
             std::move(bitcode_module), llvm::Linker::Flags::LinkOnlyNeeded,
-            [](llvm::Module& M, const llvm::StringSet<>& GVS) {
-              internalizeModule(M, [&GVS](const llvm::GlobalValue& GV) {
+            [](Module& M, const StringSet<>& GVS) {
+              internalizeModule(M, [&GVS](const GlobalValue& GV) {
                 return !GV.hasName() || (GVS.count(GV.getName()) == 0);
               });
             })) {
@@ -567,7 +561,7 @@ static std::vector<string> GetROCDLPaths(int amdgpu_version,
 // Emits the given module to HSA Code Object. target_machine is an initialized
 // TargetMachine for the AMDGPU target.
 StatusOr<std::vector<uint8>> EmitModuleToHsaco(
-    llvm::Module* module, llvm::TargetMachine* target_machine) {
+    Module* module, llvm::TargetMachine* target_machine) {
   auto* env = tensorflow::Env::Default();
   std::vector<std::string> tempdir_vector;
   env->GetLocalTempDirectories(&tempdir_vector);

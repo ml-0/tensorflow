@@ -21,17 +21,17 @@ namespace tensorflow {
 namespace io {
 
 BufferedInputStream::BufferedInputStream(InputStreamInterface* input_stream,
-                                         size_t buffer_bytes,
+                                         size_t buffer_size,
                                          bool owns_input_stream)
     : input_stream_(input_stream),
-      size_(buffer_bytes),
+      size_(buffer_size),
       owns_input_stream_(owns_input_stream) {
   buf_.reserve(size_);
 }
 
 BufferedInputStream::BufferedInputStream(RandomAccessFile* file,
-                                         size_t buffer_bytes)
-    : BufferedInputStream(new RandomAccessInputStream(file), buffer_bytes,
+                                         size_t buffer_size)
+    : BufferedInputStream(new RandomAccessInputStream(file), buffer_size,
                           true) {}
 
 BufferedInputStream::~BufferedInputStream() {
@@ -49,15 +49,14 @@ Status BufferedInputStream::FillBuffer() {
   Status s = input_stream_->ReadNBytes(size_, &buf_);
   pos_ = 0;
   limit_ = buf_.size();
-  if (!s.ok()) {
+  if (buf_.empty()) {
+    DCHECK(!s.ok());
     file_status_ = s;
   }
   return s;
 }
 
-template <typename StringType>
-Status BufferedInputStream::ReadLineHelper(StringType* result,
-                                           bool include_eol) {
+Status BufferedInputStream::ReadLineHelper(string* result, bool include_eol) {
   result->clear();
   Status s;
   while (true) {
@@ -71,13 +70,13 @@ Status BufferedInputStream::ReadLineHelper(StringType* result,
     char c = buf_[pos_++];
     if (c == '\n') {
       if (include_eol) {
-        result->append(1, c);
+        *result += c;
       }
       return Status::OK();
     }
     // We don't append '\r' to *result
     if (c != '\r') {
-      result->append(1, c);
+      *result += c;
     }
   }
   if (errors::IsOutOfRange(s) && !result->empty()) {
@@ -92,7 +91,7 @@ Status BufferedInputStream::ReadNBytes(int64 bytes_to_read, tstring* result) {
                                    bytes_to_read);
   }
   result->clear();
-  if (pos_ == limit_ && !file_status_.ok() && bytes_to_read > 0) {
+  if (!file_status_.ok() && bytes_to_read > 0) {
     return file_status_;
   }
   result->reserve(bytes_to_read);
@@ -200,10 +199,6 @@ Status BufferedInputStream::Reset() {
 }
 
 Status BufferedInputStream::ReadLine(string* result) {
-  return ReadLineHelper(result, false);
-}
-
-Status BufferedInputStream::ReadLine(tstring* result) {
   return ReadLineHelper(result, false);
 }
 

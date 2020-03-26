@@ -3,7 +3,6 @@ tensorflow {
     *tensorflow*;
     *toco*;
     *perftools*gputools*;
-    *tf_*;
     *TF_*;
     *Eager*;
     *TFE_*;

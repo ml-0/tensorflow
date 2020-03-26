@@ -17,10 +17,10 @@ limitations under the License.
 
 #include "tensorflow/compiler/mlir/xla/hlo_utils.h"
 
-#include "mlir/IR/AffineMap.h"  // from @llvm-project
-#include "mlir/IR/Attributes.h"  // from @llvm-project
-#include "mlir/IR/StandardTypes.h"  // from @llvm-project
-#include "mlir/IR/TypeUtilities.h"  // from @llvm-project
+#include "mlir/IR/AffineMap.h"  // TF:llvm-project
+#include "mlir/IR/Attributes.h"  // TF:llvm-project
+#include "mlir/IR/StandardTypes.h"  // TF:llvm-project
+#include "mlir/IR/TypeUtilities.h"  // TF:llvm-project
 #include "tensorflow/compiler/xla/literal.h"
 
 namespace xla {
@@ -30,34 +30,27 @@ using mlir::AffineMap;
 using mlir::Builder;
 using mlir::DenseElementsAttr;
 using mlir::ShapedType;
-using xla::LiteralBase;
+using xla::Literal;
 using xla::StatusOr;
 
 template <typename CppType>
-::mlir::DenseElementsAttr CreateDenseAttrFromLiteral(
-    const ShapedType& type, const LiteralBase& literal) {
+::mlir::DenseElementsAttr CreateDenseAttrFromLiteral(const ShapedType& type,
+                                                     const Literal& literal) {
   auto data_span = literal.data<CppType>();
   return ::mlir::DenseElementsAttr::get(
       type, llvm::makeArrayRef(data_span.data(), data_span.size()));
 }
 
-StatusOr<llvm::SmallVector<AffineMap, 1>> GetPermutationIfAvailable(
+llvm::SmallVector<AffineMap, 2> GetPermutationIfAvailable(
     const Shape& shape, mlir::Builder builder) {
-  if (!shape.has_layout() ||
-      LayoutUtil::IsMonotonicWithDim0Major(shape.layout())) {
-    return llvm::SmallVector<AffineMap, 1>{};
+  if (!shape.has_layout() || shape.layout().minor_to_major().empty()) {
+    return {};
   }
-  if (!shape.is_static()) {
-    return tensorflow::errors::Internal(
-        "Permutations for dynamic shapes are not yet supported");
-  }
-  llvm::SmallVector<int64_t, 2> permuted_sizes;
+  llvm::SmallVector<unsigned, 2> permutation;
   for (auto dim : llvm::reverse(shape.layout().minor_to_major())) {
-    permuted_sizes.push_back(shape.dimensions(dim));
+    permutation.push_back(dim);
   }
-  return llvm::SmallVector<AffineMap, 1>{AffineMap::get(
-      permuted_sizes.size(), 0,
-      makeCanonicalStridedLayoutExpr(permuted_sizes, builder.getContext()))};
+  return {AffineMap::getPermutationMap(permutation, builder.getContext())};
 }
 
 }  // namespace
@@ -71,14 +64,12 @@ StatusOr<mlir::MemRefType> ConvertTensorShapeToMemRefType(
   using mlir::MemRefType;
   auto dimensions = shape.dimensions();
   llvm::SmallVector<int64_t, 4> array(dimensions.begin(), dimensions.end());
-  auto permutation_or = GetPermutationIfAvailable(shape, builder);
-  if (!permutation_or.ok()) return permutation_or.status();
   return MemRefType::get(array, element_type_or.ValueOrDie(),
-                         permutation_or.ValueOrDie());
+                         GetPermutationIfAvailable(shape, builder));
 }
 
 StatusOr<mlir::DenseElementsAttr> CreateDenseElementsAttrFromLiteral(
-    const LiteralBase& literal, Builder builder) {
+    const Literal& literal, Builder builder) {
   TF_ASSIGN_OR_RETURN(auto type,
                       ConvertTensorShapeToType<mlir::RankedTensorType>(
                           literal.shape(), builder));
@@ -108,12 +99,12 @@ StatusOr<mlir::DenseElementsAttr> CreateDenseElementsAttrFromLiteral(
 }
 
 mlir::DenseIntElementsAttr CreateDenseIntElementsAttrFromVector(
-    const llvm::ArrayRef<int64> vector, mlir::Builder builder,
-    llvm::ArrayRef<int64_t> shape) {
+    const llvm::ArrayRef<int64> vector, mlir::Builder builder) {
   return mlir::DenseIntElementsAttr::get(
-      mlir::RankedTensorType::get(shape.empty() ? vector.size() : shape,
-                                  builder.getIntegerType(64)),
-      vector);
+             mlir::RankedTensorType::get(vector.size(),
+                                         builder.getIntegerType(64)),
+             vector)
+      .cast<mlir::DenseIntElementsAttr>();
 }
 
 StatusOr<mlir::Type> ConvertPrimitiveTypeToMLIRType(PrimitiveType element_type,

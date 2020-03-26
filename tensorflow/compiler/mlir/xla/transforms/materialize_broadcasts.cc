@@ -15,11 +15,11 @@ limitations under the License.
 
 #include <numeric>
 
-#include "mlir/Dialect/StandardOps/IR/Ops.h"  // from @llvm-project
-#include "mlir/IR/MLIRContext.h"  // from @llvm-project
-#include "mlir/IR/Operation.h"  // from @llvm-project
-#include "mlir/IR/PatternMatch.h"  // from @llvm-project
-#include "mlir/Transforms/DialectConversion.h"  // from @llvm-project
+#include "mlir/Dialect/StandardOps/IR/Ops.h"  // TF:llvm-project
+#include "mlir/IR/MLIRContext.h"  // TF:llvm-project
+#include "mlir/IR/Operation.h"  // TF:llvm-project
+#include "mlir/IR/PatternMatch.h"  // TF:llvm-project
+#include "mlir/Transforms/DialectConversion.h"  // TF:llvm-project
 #include "tensorflow/compiler/mlir/xla/ir/hlo_ops.h"
 #include "tensorflow/compiler/mlir/xla/transforms/rewriters.h"
 
@@ -260,22 +260,22 @@ struct BinaryOpWithBroadcastConvert : public OpRewritePattern<SrcOp> {
   explicit BinaryOpWithBroadcastConvert(MLIRContext *context)
       : OpRewritePattern<SrcOp>(context) {}
 
-  LogicalResult matchAndRewrite(SrcOp op,
-                                PatternRewriter &rewriter) const override {
+  PatternMatchResult matchAndRewrite(SrcOp op,
+                                     PatternRewriter &rewriter) const override {
     Value new_lhs;
     Value new_rhs;
 
     auto op_ranked_type = op.getType().template dyn_cast<RankedTensorType>();
-    if (!op_ranked_type) return failure();
+    if (!op_ranked_type) return this->matchFailure();
 
     if (op_ranked_type.hasStaticShape()) {
       if (!CreateBroadcastsForBinaryOp(op, &rewriter, &new_lhs, &new_rhs)) {
-        return failure();
+        return this->matchFailure();
       }
     } else {
       if (!CreateDynamicBroadcastsForBinaryOp(op, &rewriter, &new_lhs,
                                               &new_rhs)) {
-        return failure();
+        return this->matchFailure();
       }
     }
 
@@ -283,7 +283,7 @@ struct BinaryOpWithBroadcastConvert : public OpRewritePattern<SrcOp> {
     // New args are broadcasts, so no dims are needed on the replacement op.
     rewriter.replaceOpWithNewOp<SrcOp>(op, op.getType(), new_lhs, new_rhs,
                                        /*broadcast_dims=*/nullptr);
-    return success();
+    return this->matchSuccess();
   }
 };
 
@@ -292,18 +292,18 @@ struct CompareWithBroadcastConvert : public OpRewritePattern<CompareOp> {
   explicit CompareWithBroadcastConvert(MLIRContext *context)
       : OpRewritePattern<CompareOp>(context) {}
 
-  LogicalResult matchAndRewrite(CompareOp op,
-                                PatternRewriter &rewriter) const override {
+  PatternMatchResult matchAndRewrite(CompareOp op,
+                                     PatternRewriter &rewriter) const override {
     Value new_lhs;
     Value new_rhs;
     if (!CreateBroadcastsForBinaryOp(op, &rewriter, &new_lhs, &new_rhs)) {
-      return failure();
+      return this->matchFailure();
     }
 
     rewriter.replaceOpWithNewOp<CompareOp>(op, op.getType(), new_lhs, new_rhs,
                                            /*broadcast_dims=*/nullptr,
                                            op.comparison_direction());
-    return success();
+    return this->matchSuccess();
   }
 };
 

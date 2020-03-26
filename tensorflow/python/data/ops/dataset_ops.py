@@ -225,7 +225,9 @@ class DatasetV2(tracking_base.Trackable, composite_tensor.CompositeTensor):
       serialized graph.
     """
     if external_state_policy:
-      policy = external_state_policy.value
+      policy = None
+      if external_state_policy:
+        policy = external_state_policy.value
       return gen_dataset_ops.dataset_to_graph_v2(
           self._variant_tensor,
           external_state_policy=policy,
@@ -408,8 +410,7 @@ class DatasetV2(tracking_base.Trackable, composite_tensor.CompositeTensor):
   def element_spec(self):
     """The type specification of an element of this dataset.
 
-    >>> dataset = tf.data.Dataset.from_tensor_slices([1, 2, 3])
-    >>> dataset.element_spec
+    >>> dataset = tf.data.Dataset.from_tensor_slices([1, 2, 3]).element_spec
     TensorSpec(shape=(), dtype=tf.int32, name=None)
 
     Returns:
@@ -697,7 +698,7 @@ class DatasetV2(tracking_base.Trackable, composite_tensor.CompositeTensor):
     >>> list(dataset.take(3).as_numpy_iterator())
     [(1, array([1])), (2, array([1, 1])), (3, array([1, 1, 1]))]
 
-    Note: The current implementation of `Dataset.from_generator()` uses
+    NOTE: The current implementation of `Dataset.from_generator()` uses
     `tf.numpy_function` and inherits the same constraints. In particular, it
     requires the `Dataset`- and `Iterator`-related operations to be placed
     on a device in the same process as the Python program that called
@@ -705,7 +706,7 @@ class DatasetV2(tracking_base.Trackable, composite_tensor.CompositeTensor):
     serialized in a `GraphDef`, and you should not use this method if you
     need to serialize your model and restore it in a different environment.
 
-    Note: If `generator` depends on mutable global variables or other external
+    NOTE: If `generator` depends on mutable global variables or other external
     state, be aware that the runtime may invoke `generator` multiple times
     (in order to support repeating the `Dataset`) and at any time
     between the call to `Dataset.from_generator()` and the production of the
@@ -1023,20 +1024,17 @@ class DatasetV2(tracking_base.Trackable, composite_tensor.CompositeTensor):
     filename with `list_files` may result in poor performance with remote
     storage systems.
 
-    Note: The default behavior of this method is to return filenames in
+    NOTE: The default behavior of this method is to return filenames in
     a non-deterministic random shuffled order. Pass a `seed` or `shuffle=False`
     to get results in a deterministic order.
 
     Example:
       If we had the following files on our filesystem:
-
         - /path/to/dir/a.txt
         - /path/to/dir/b.py
         - /path/to/dir/c.py
-
       If we pass "/path/to/dir/*.py" as the directory, the dataset
       would produce:
-
         - /path/to/dir/b.py
         - /path/to/dir/c.py
 
@@ -1090,7 +1088,7 @@ class DatasetV2(tracking_base.Trackable, composite_tensor.CompositeTensor):
     >>> list(dataset.as_numpy_iterator())
     [1, 2, 3, 1, 2, 3, 1, 2, 3]
 
-    Note: If this dataset is a function of global state (e.g. a random number
+    NOTE: If this dataset is a function of global state (e.g. a random number
     generator), then different repetitions may produce different elements.
 
     Args:
@@ -1344,7 +1342,6 @@ class DatasetV2(tracking_base.Trackable, composite_tensor.CompositeTensor):
 
     Raises:
       InvalidArgumentError: if `num_shards` or `index` are illegal values.
-
         Note: error checking is done on a best-effort basis, and errors aren't
         guaranteed to be caught upon dataset creation. (e.g. providing in a
         placeholder tensor bypasses the early checking, and will instead result
@@ -1702,7 +1699,7 @@ name=None))
      5, 5, 5, 5,
      5, 5]
 
-    Note: The order of elements yielded by this transformation is
+    NOTE: The order of elements yielded by this transformation is
     deterministic, as long as `map_func` is a pure function and
     `deterministic=True`. If `map_func` contains any stateful operations, the
     order in which that state is accessed is undefined.
@@ -2366,7 +2363,7 @@ class DatasetV1(DatasetV2):
                                deterministic=None):
     """Maps `map_func` across the elements of this dataset.
 
-    Note: This is an escape hatch for existing uses of `map` that do not work
+    NOTE: This is an escape hatch for existing uses of `map` that do not work
     with V2 functions. New uses are strongly discouraged and existing uses
     should migrate to `map` as this method will be removed in V2.
 
@@ -2429,7 +2426,7 @@ class DatasetV1(DatasetV2):
   def filter_with_legacy_function(self, predicate):
     """Filters this dataset according to `predicate`.
 
-    Note: This is an escape hatch for existing uses of `filter` that do not work
+    NOTE: This is an escape hatch for existing uses of `filter` that do not work
     with V2 functions. New uses are strongly discouraged and existing uses
     should migrate to `filter` as this method will be removed in V2.
 
@@ -2729,12 +2726,15 @@ class Options(options_lib.OptionsBase):
   experimental_external_state_policy = options_lib.create_option(
       name="experimental_external_state_policy",
       ty=distribute_options.ExternalStatePolicy,
-      docstring="This option can be used to override the default policy for "
-      "how to handle external state when serializing a dataset or "
-      "checkpointing its iterator. There are three settings available - "
-      "IGNORE: in which we completely ignore any state; WARN: We warn the "
-      "user that some state might be thrown away; FAIL: We fail if any state "
-      "is being captured.")
+      docstring="By default, tf.data will refuse to serialize a dataset or "
+      "checkpoint its iterator if the dataset contains a stateful op as the "
+      "serialization / checkpointing won't be able to capture its state. "
+      "Users can -- at their own risk -- override this restriction by "
+      "explicitly specifying that they are fine throwing away the state "
+      "in these ops. There are three settings available - IGNORE: in which we"
+      "completely ignore any state; WARN: We warn the user that some state "
+      "might be thrown away; FAIL: We fail if any state is being captured.",
+      default_factory=lambda: distribute_options.ExternalStatePolicy.WARN)
 
   def _graph_rewrites(self):
     """Produces the list of enabled static graph rewrites."""
@@ -3518,51 +3518,6 @@ class CacheDataset(UnaryUnchangedStructureDataset):
     super(CacheDataset, self).__init__(input_dataset, variant_tensor)
 
 
-class _SeedGeneratorDeleter(object):
-  """An object which cleans up an anonymous seed generator resource.
-
-  An alternative to defining a __del__ method on an object. Even if the parent
-  object is part of a reference cycle, the cycle will be collectable.
-  """
-
-  def __init__(self, handle, device, deleter):
-    self._deleter = deleter
-    self._handle = handle
-    self._device = device
-    self._eager_mode = context.executing_eagerly()
-
-  def __del__(self):
-    with ops.device(self._device):
-      # Make sure the resource is deleted in the same mode as it was created in.
-      if self._eager_mode:
-        with context.eager_mode():
-          gen_dataset_ops.delete_seed_generator(
-              handle=self._handle, deleter=self._deleter)
-      else:
-        with context.graph_mode():
-          gen_dataset_ops.delete_seed_generator(
-              handle=self._handle, deleter=self._deleter)
-
-
-class _SeedGenerator(object):
-  """Represents a fixed seed generator resource."""
-
-  def __init__(self, seed, seed2, reshuffle):
-    super(_SeedGenerator, self).__init__()
-    self._device = context.context().device_name
-    self._handle, self._deleter = (
-        gen_dataset_ops.anonymous_seed_generator(
-            seed=seed, seed2=seed2, reshuffle=reshuffle))
-    self._resource_deleter = _SeedGeneratorDeleter(
-        handle=self._handle, device=self._device, deleter=self._deleter)
-
-  @property
-  def handle(self):
-    return self._handle
-
-
-# TODO(b/151115950): Remove this class after forward compatibility window
-# expires
 class _RandomSeedGeneratorDeleter(object):
   """An object which cleans up an anonymous random seed generator resource.
 
@@ -3589,8 +3544,6 @@ class _RandomSeedGeneratorDeleter(object):
               handle=self._handle, deleter=self._deleter)
 
 
-# TODO(b/151115950): Remove this class after forward compatibility window
-# expires
 class _RandomSeedGenerator(object):
   """Represents a random seed generator resource."""
 
@@ -3644,14 +3597,9 @@ class ShuffleDataset(UnaryUnchangedStructureDataset):
     else:
       self._reshuffle_each_iteration = reshuffle_each_iteration
 
-    if (tf2.enabled() and (self._reshuffle_each_iteration or
-                           compat.forward_compatible(2020, 4, 10)) and
-        (context.executing_eagerly() or ops.inside_function())):
-      if compat.forward_compatible(2020, 4, 10):
-        self._seed_generator = _SeedGenerator(self._seed, self._seed2,
-                                              self._reshuffle_each_iteration)
-      else:
-        self._seed_generator = _RandomSeedGenerator(self._seed, self._seed2)
+    if tf2.enabled() and self._reshuffle_each_iteration and (
+        context.executing_eagerly() or ops.inside_function()):
+      self._seed_generator = _RandomSeedGenerator(self._seed, self._seed2)
       variant_tensor = gen_dataset_ops.shuffle_dataset_v2(
           input_dataset._variant_tensor,  # pylint: disable=protected-access
           buffer_size=self._buffer_size,
@@ -4228,7 +4176,7 @@ class ParallelInterleaveDataset(UnaryDataset):
           f=self._map_func.function,
           deterministic=deterministic_string,
           **self._flat_structure)
-    else:
+    elif deterministic is not None or compat.forward_compatible(2020, 2, 20):
       variant_tensor = gen_dataset_ops.parallel_interleave_dataset_v3(
           input_dataset._variant_tensor,  # pylint: disable=protected-access
           self._map_func.function.captured_inputs,  # pylint: disable=protected-access
@@ -4237,6 +4185,15 @@ class ParallelInterleaveDataset(UnaryDataset):
           self._num_parallel_calls,
           f=self._map_func.function,
           deterministic=deterministic_string,
+          **self._flat_structure)
+    else:
+      variant_tensor = gen_dataset_ops.parallel_interleave_dataset_v2(
+          input_dataset._variant_tensor,  # pylint: disable=protected-access
+          self._map_func.function.captured_inputs,  # pylint: disable=protected-access
+          self._cycle_length,
+          self._block_length,
+          self._num_parallel_calls,
+          f=self._map_func.function,
           **self._flat_structure)
     super(ParallelInterleaveDataset, self).__init__(input_dataset,
                                                     variant_tensor)

@@ -20,14 +20,14 @@ limitations under the License.
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/raw_ostream.h"
-#include "mlir/Dialect/StandardOps/IR/Ops.h"  // from @llvm-project
-#include "mlir/IR/Attributes.h"  // from @llvm-project
-#include "mlir/IR/BlockAndValueMapping.h"  // from @llvm-project
-#include "mlir/IR/Builders.h"  // from @llvm-project
-#include "mlir/IR/Identifier.h"  // from @llvm-project
-#include "mlir/IR/Location.h"  // from @llvm-project
-#include "mlir/IR/Region.h"  // from @llvm-project
-#include "mlir/IR/StandardTypes.h"  // from @llvm-project
+#include "mlir/Dialect/StandardOps/IR/Ops.h"  // TF:llvm-project
+#include "mlir/IR/Attributes.h"  // TF:llvm-project
+#include "mlir/IR/BlockAndValueMapping.h"  // TF:llvm-project
+#include "mlir/IR/Builders.h"  // TF:llvm-project
+#include "mlir/IR/Identifier.h"  // TF:llvm-project
+#include "mlir/IR/Location.h"  // TF:llvm-project
+#include "mlir/IR/Region.h"  // TF:llvm-project
+#include "mlir/IR/StandardTypes.h"  // TF:llvm-project
 #include "tensorflow/compiler/mlir/tensorflow/utils/error_util.h"
 #include "tensorflow/compiler/mlir/xla/hlo_utils.h"
 #include "tensorflow/compiler/mlir/xla/ir/hlo_ops.h"
@@ -64,6 +64,36 @@ string SanitizeFunctionName(llvm::StringRef name) {
   string output(name);
   llvm::for_each(output, [](char& x) { x = x == '-' ? '_' : x; });
   return output;
+}
+
+StatusOr<DenseElementsAttr> CreateDenseAttrFromLiteral(ShapedType type,
+                                                       const Literal& literal) {
+#define DENSE_ELEMENT_ATTR_BUILDER(xla_type, cpp_type)                 \
+  case xla_type: {                                                     \
+    auto data_span = literal.data<cpp_type>();                         \
+    return DenseElementsAttr::get(                                     \
+        type, llvm::makeArrayRef(data_span.data(), data_span.size())); \
+  }
+
+  switch (literal.shape().element_type()) {
+    DENSE_ELEMENT_ATTR_BUILDER(PrimitiveType::PRED, bool)
+    DENSE_ELEMENT_ATTR_BUILDER(PrimitiveType::F32, float)
+    DENSE_ELEMENT_ATTR_BUILDER(PrimitiveType::F64, double)
+    DENSE_ELEMENT_ATTR_BUILDER(PrimitiveType::S8, int8)
+    DENSE_ELEMENT_ATTR_BUILDER(PrimitiveType::S16, int16)
+    DENSE_ELEMENT_ATTR_BUILDER(PrimitiveType::S32, int32)
+    DENSE_ELEMENT_ATTR_BUILDER(PrimitiveType::S64, int64)
+    // TODO(b/130356985): Update once MLIR supports unsigned integers.
+    DENSE_ELEMENT_ATTR_BUILDER(PrimitiveType::U8, uint8)
+    DENSE_ELEMENT_ATTR_BUILDER(PrimitiveType::U16, uint16)
+    DENSE_ELEMENT_ATTR_BUILDER(PrimitiveType::U32, uint32)
+    DENSE_ELEMENT_ATTR_BUILDER(PrimitiveType::U64, uint64)
+    default:
+      return tensorflow::errors::Internal(
+          absl::StrCat("Unsupported type: ",
+                       PrimitiveType_Name(literal.shape().element_type())));
+  }
+#undef DENSE_ELEMENT_ATTR_BUILDER
 }
 
 // Returns whether the instruction is a default dot operation.
@@ -168,8 +198,7 @@ tensorflow::Status HloFunctionImporter::ImportInstructions(
 StatusOr<mlir::Operation*> HloFunctionImporter::ImportInstruction(
     HloInstruction* instruction, mlir::OpBuilder* func_builder) {
   TF_ASSIGN_OR_RETURN(auto operands, GetOperands(instruction));
-  TF_ASSIGN_OR_RETURN(auto result_type, ConvertShapeToType<RankedTensorType>(
-                                            instruction->shape(), *builder_));
+  TF_ASSIGN_OR_RETURN(auto result_type, ConvertType(instruction->shape()));
   llvm::SmallVector<NamedAttribute, 10> attributes = {builder_->getNamedAttr(
       "name", builder_->getStringAttr(instruction->name()))};
   mlir::Location loc = func_builder->getUnknownLoc();
@@ -179,8 +208,8 @@ StatusOr<mlir::Operation*> HloFunctionImporter::ImportInstruction(
       return nullptr;
     }
     case HloOpcode::kConstant: {
-      const Literal& literal = instruction->literal();
-      auto attr = CreateDenseElementsAttrFromLiteral(literal, *builder_);
+      auto attr = CreateDenseAttrFromLiteral(
+          result_type.cast<mlir::TensorType>(), instruction->literal());
       if (!attr.ok()) return attr.status();
       mlir::Operation* new_operation =
           func_builder->create<mlir::ConstantOp>(loc, attr.ValueOrDie());
@@ -207,9 +236,11 @@ StatusOr<mlir::Operation*> HloFunctionImporter::ImportInstruction(
     case HloOpcode::kBroadcast: {
       // Note that the HLO broadcast is more powerful than the XLA broadcast op.
       // BroadcastInDim offers a superset of the HLO op's functionality.
-      attributes.push_back(
-          builder_->getNamedAttr("broadcast_dimensions",
-                                 ConvertDimensions(instruction->dimensions())));
+      if (!instruction->dimensions().empty()) {
+        attributes.push_back(builder_->getNamedAttr(
+            "broadcast_dimensions",
+            ConvertDimensions(instruction->dimensions())));
+      }
       MakeAndReturn(BroadcastInDimOp);
     }
 #define MakeAndReturnBatchNormOp(batch_norm_op)                         \
@@ -668,12 +699,29 @@ StatusOr<llvm::SmallVector<mlir::Value, 4>> HloFunctionImporter::GetOperands(
   return operands;
 }
 
+StatusOr<mlir::Type> HloFunctionImporter::ConvertType(const Shape& shape) {
+  if (shape.IsToken()) {
+    return mlir::xla_hlo::TokenType::get(builder_->getContext());
+  }
+  if (shape.IsTuple()) {
+    llvm::SmallVector<mlir::Type, 4> contents;
+    contents.reserve(shape.tuple_shapes_size());
+    for (const auto& subtype : shape.tuple_shapes()) {
+      TF_ASSIGN_OR_RETURN(auto mlir_subtype, ConvertType(subtype));
+      contents.push_back(mlir_subtype);
+    }
+
+    return builder_->getTupleType(contents);
+  }
+
+  return ConvertTensorShapeToType<RankedTensorType>(shape, *builder_);
+}
+
 tensorflow::Status HloFunctionImporter::GetMlirTypes(
     const std::vector<HloInstruction*>& instructions,
     llvm::SmallVectorImpl<mlir::Type>* types) {
   for (auto instruction : instructions) {
-    TF_ASSIGN_OR_RETURN(auto ret_type, ConvertShapeToType<RankedTensorType>(
-                                           instruction->shape(), *builder_));
+    TF_ASSIGN_OR_RETURN(auto ret_type, ConvertType(instruction->shape()));
     types->push_back(ret_type);
   }
   return tensorflow::Status::OK();

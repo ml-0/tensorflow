@@ -29,6 +29,5 @@ cc_library(
         "//tensorflow/core:protos_all_cc",
         "//tensorflow/core/profiler:profiler_service_proto_cc",
         "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/time",
     ],
 )

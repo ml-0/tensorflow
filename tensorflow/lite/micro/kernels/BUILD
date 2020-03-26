@@ -22,7 +22,6 @@ cc_library(
         "add.cc",
         "arg_min_max.cc",
         "ceil.cc",
-        "circular_buffer.cc",
         "comparisons.cc",
         "concatenation.cc",
         "conv.cc",
@@ -47,7 +46,6 @@ cc_library(
         "softmax.cc",
         "split.cc",
         "strided_slice.cc",
-        "sub.cc",
         "svdf.cc",
         "unpack.cc",
     ],
@@ -94,7 +92,6 @@ cc_library(
         "add.cc",
         "arg_min_max.cc",
         "ceil.cc",
-        "circular_buffer.cc",
         "comparisons.cc",
         "concatenation.cc",
         "conv.cc",
@@ -119,7 +116,6 @@ cc_library(
         "softmax.cc",
         "split.cc",
         "strided_slice.cc",
-        "sub.cc",
         "svdf.cc",
         "unpack.cc",
     ],
@@ -359,19 +355,6 @@ tflite_micro_cc_test(
 )
 
 tflite_micro_cc_test(
-    name = "sub_test",
-    srcs = [
-        "sub_test.cc",
-    ],
-    deps = [
-        ":all_ops_resolver",
-        "//tensorflow/lite/c:common",
-        "//tensorflow/lite/micro:micro_framework",
-        "//tensorflow/lite/micro/testing:micro_test",
-    ],
-)
-
-tflite_micro_cc_test(
     name = "arg_min_max_test",
     srcs = [
         "arg_min_max_test.cc",
@@ -392,9 +375,9 @@ tflite_micro_cc_test(
     ],
     deps = [
         ":all_ops_resolver",
-        ":micro_utils",
         "//tensorflow/lite/c:common",
         "//tensorflow/lite/micro:micro_framework",
+        "//tensorflow/lite/micro/kernels:micro_utils",
         "//tensorflow/lite/micro/testing:micro_test",
     ],
 )
@@ -514,9 +497,9 @@ tflite_micro_cc_test(
     ],
     deps = [
         ":all_ops_resolver",
-        ":micro_utils",
         "//tensorflow/lite/c:common",
         "//tensorflow/lite/micro:micro_framework",
+        "//tensorflow/lite/micro/kernels:micro_utils",
         "//tensorflow/lite/micro/testing:micro_test",
     ],
 )
@@ -528,9 +511,9 @@ tflite_micro_cc_test(
     ],
     deps = [
         ":all_ops_resolver",
-        ":micro_utils",
         "//tensorflow/lite/c:common",
         "//tensorflow/lite/micro:micro_framework",
+        "//tensorflow/lite/micro/kernels:micro_utils",
         "//tensorflow/lite/micro/testing:micro_test",
     ],
 )
@@ -602,19 +585,6 @@ tflite_micro_cc_test(
     ],
     deps = [
         ":all_ops_resolver",
-        "//tensorflow/lite/c:common",
-        "//tensorflow/lite/micro/testing:micro_test",
-    ],
-)
-
-tflite_micro_cc_test(
-    name = "circular_buffer_test",
-    srcs = [
-        "circular_buffer_test.cc",
-    ],
-    deps = [
-        ":all_ops_resolver",
-        ":micro_ops",
         "//tensorflow/lite/c:common",
         "//tensorflow/lite/micro/testing:micro_test",
     ],

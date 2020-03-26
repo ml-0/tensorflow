@@ -26,6 +26,7 @@ cc_library(
     deps = [
         "//tensorflow/lite/c:common",
         "//tensorflow/lite/core/api",
+        "//tensorflow/lite/schema:schema_fbs",
     ],
 )
 
@@ -45,7 +46,9 @@ cc_library(
     deps = [
         ":memory_planner",
         "//tensorflow/lite/c:common",
+        "//tensorflow/lite/core/api",
         "//tensorflow/lite/micro:micro_compatibility",
+        "//tensorflow/lite/schema:schema_fbs",
     ],
 )
 
@@ -66,7 +69,9 @@ cc_library(
     deps = [
         ":memory_planner",
         "//tensorflow/lite/c:common",
+        "//tensorflow/lite/core/api",
         "//tensorflow/lite/micro:micro_compatibility",
+        "//tensorflow/lite/schema:schema_fbs",
     ],
 )
 

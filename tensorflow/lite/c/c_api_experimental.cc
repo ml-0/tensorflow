@@ -50,11 +50,6 @@ void TfLiteInterpreterOptionsAddCustomOp(TfLiteInterpreterOptions* options,
   options->op_resolver.AddCustom(name, registration, min_version, max_version);
 }
 
-void TfLiteInterpreterOptionsSetUseNNAPI(TfLiteInterpreterOptions* options,
-                                         bool enable) {
-  options->use_nnapi = enable;
-}
-
 #ifdef __cplusplus
 }  // extern "C"
 #endif  // __cplusplus

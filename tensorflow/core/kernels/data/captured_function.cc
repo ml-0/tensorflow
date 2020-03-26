@@ -31,7 +31,6 @@ limitations under the License.
 #include "tensorflow/core/lib/gtl/optional.h"
 #include "tensorflow/core/lib/random/random.h"
 #include "tensorflow/core/lib/strings/strcat.h"
-#include "tensorflow/core/platform/errors.h"
 #include "tensorflow/core/platform/notification.h"
 #include "tensorflow/core/profiler/lib/traceme.h"
 
@@ -91,6 +90,8 @@ class SimpleStepStatsCollector : public StepStatsCollectorInterface {
 
     void SetOutput(int slot, const Tensor* tensor) override {}
 
+    void SetReferencedTensors(const TensorReferenceVector& tensors) override {}
+
     void SetScheduled(int64 nanos) override {}
 
    private:
@@ -100,7 +101,7 @@ class SimpleStepStatsCollector : public StepStatsCollectorInterface {
   };
 
   mutex mu_;
-  int64 processing_time_ TF_GUARDED_BY(mu_) = 0;
+  int64 processing_time_ GUARDED_BY(mu_) = 0;
 };
 
 Status RunShortCircuit(const ShortCircuitInfo& info,
@@ -431,6 +432,15 @@ Status MakeIteratorFromInputElement(
       out_iterator);
 }
 
+Status MakeIteratorFromInputElement(
+    IteratorContext* ctx, const std::vector<Tensor>& input_element,
+    int64 thread_index, const InstantiatedCapturedFunction& inst_captured_func,
+    StringPiece prefix, std::unique_ptr<IteratorBase>* out_iterator) {
+  return MakeIteratorFromInputElement(ctx, /*parent=*/nullptr, input_element,
+                                      thread_index, inst_captured_func, prefix,
+                                      out_iterator);
+}
+
 /* static */
 Status FunctionMetadata::Create(
     OpKernelConstruction* ctx, const string& func_name, Params params,
@@ -449,40 +459,36 @@ Status FunctionMetadata::Create(
       (*out_metadata)->func_.name(), &(*out_metadata)->lib_def_));
   TF_RETURN_IF_ERROR(CreateShortCircuitInfo(
       ctx, (*out_metadata)->func_, &(*out_metadata)->short_circuit_info_));
-  const FunctionDef* fdef;
-  TF_RETURN_IF_ERROR(LookupFunction(*(*out_metadata)->lib_def(),
-                                    (*out_metadata)->func().name(), &fdef));
-
-  auto attr = fdef->attr().find(FunctionLibraryDefinition::kIntsOnDeviceAttr);
-  if (attr != fdef->attr().end() && attr->second.b()) {
-    LOG(WARNING)
-        << "Disabling multi-device execution for a function that uses the "
-        << FunctionLibraryDefinition::kIntsOnDeviceAttr << " attribute.";
-    (*out_metadata)->use_multi_device_function_ = false;
-    return Status::OK();
-  }
-  auto validate_arg = [](const OpDef::ArgDef& arg) {
-    if (!arg.number_attr().empty() || !arg.type_list_attr().empty()) {
-      LOG(WARNING) << "Disabling multi-device execution for a function with "
-                      "a vector argument "
-                   << arg.name() << ".";
-      return false;
-    }
-    return true;
-  };
-  for (const auto& arg : fdef->signature().input_arg()) {
-    if (!validate_arg(arg)) {
-      (*out_metadata)->use_multi_device_function_ = false;
-      return Status::OK();
-    }
-  }
-  for (const auto& arg : fdef->signature().output_arg()) {
-    if (!validate_arg(arg)) {
-      (*out_metadata)->use_multi_device_function_ = false;
-      return Status::OK();
-    }
-  }
+  (*out_metadata)->ValidateMultiDevice();
   return Status::OK();
+}
+
+void FunctionMetadata::ValidateMultiDevice() {
+  const FunctionDef* fdef = lib_def_->Find(func_.name());
+  if (is_multi_device_function_) {
+    auto attr = fdef->attr().find(FunctionLibraryDefinition::kIntsOnDeviceAttr);
+    if (attr != fdef->attr().end() && attr->second.b()) {
+      LOG(WARNING)
+          << "Disabling multi-device execution for a function that uses the "
+          << FunctionLibraryDefinition::kIntsOnDeviceAttr << " attribute.";
+      is_multi_device_function_ = false;
+      return;
+    }
+    auto validate_arg = [this](const OpDef::ArgDef& arg) {
+      if (!arg.number_attr().empty() || !arg.type_list_attr().empty()) {
+        LOG(WARNING) << "Disabling multi-device execution for a function with "
+                        "a vector argument "
+                     << arg.name() << ".";
+        is_multi_device_function_ = false;
+      }
+    };
+    for (const auto& arg : fdef->signature().input_arg()) {
+      validate_arg(arg);
+    }
+    for (const auto& arg : fdef->signature().output_arg()) {
+      validate_arg(arg);
+    }
+  }
 }
 
 /* static */
@@ -544,9 +550,7 @@ Status CapturedFunction::Instantiate(
   if (!metadata_->use_inter_op_parallelism()) {
     inst_opts.executor_type = "SINGLE_THREADED_EXECUTOR";
   }
-  bool is_multi_device = false;
-  TF_RETURN_IF_ERROR(IsMultiDevice(ctx, &is_multi_device));
-  inst_opts.is_multi_device_function = is_multi_device;
+  TF_RETURN_IF_ERROR(IsMultiDevice(ctx, &inst_opts.is_multi_device_function));
 
   // We infer the target device from the function library runtime.
   DCHECK(lib->device() != nullptr);
@@ -610,8 +614,7 @@ Status CapturedFunction::Instantiate(
   *instantiated_captured_function =
       absl::WrapUnique<InstantiatedCapturedFunction>(
           new InstantiatedCapturedFunction(lib, f_handle, std::move(ret_types),
-                                           *ctx->runner(), this,
-                                           is_multi_device));
+                                           *ctx->runner(), this));
   return Status::OK();
 }
 
@@ -628,13 +631,12 @@ Status CapturedFunction::CheckExternalState() const {
 InstantiatedCapturedFunction::InstantiatedCapturedFunction(
     FunctionLibraryRuntime* lib, FunctionLibraryRuntime::Handle f_handle,
     DataTypeVector ret_types, std::function<void(std::function<void()>)> runner,
-    CapturedFunction* captured_func, bool is_multi_device)
+    CapturedFunction* captured_func)
     : lib_(lib),
       f_handle_(f_handle),
       ret_types_(std::move(ret_types)),
       captured_runner_(std::move(runner)),
-      captured_func_(captured_func),
-      is_multi_device_(is_multi_device) {}
+      captured_func_(captured_func) {}
 
 // NOTE: We don't release f_handle_ here and instead delegate the function
 // handle releasing to the FunctionHandleCache. This is because in some cases
@@ -852,10 +854,8 @@ void InstantiatedCapturedFunction::RunAsync(
 }
 
 bool InstantiatedCapturedFunction::ShouldCreateRendezvous() const {
-  // Rendezvous should only be created by the FLR for non-CPU single-device
-  // functions. For multi-device functions the appropriate rendezvous will be
-  // created by the process FLR.
-  return lib_->device()->device_type() != DEVICE_CPU && !is_multi_device_;
+  return lib_->device()->device_type() != DEVICE_CPU ||
+         captured_func_->is_multi_device_function();
 }
 
 CapturedFunction::CapturedFunction(
@@ -866,7 +866,7 @@ CapturedFunction::CapturedFunction(
 
 Status CapturedFunction::IsMultiDevice(IteratorContext* ctx,
                                        bool* is_multi_device) {
-  if (!metadata_->use_multi_device_function()) {
+  if (!metadata_->is_multi_device_function()) {
     *is_multi_device = false;
     return Status::OK();
   }

@@ -68,9 +68,8 @@ class DebugEventsWriterTest : public ::testing::Test {
   }
 
   void SetUp() override {
-    dump_root_ = io::JoinPath(
-        testing::TmpDir(),
-        strings::Printf("%010lld", static_cast<long long>(env()->NowMicros())));
+    dump_root_ = io::JoinPath(testing::TmpDir(),
+                              strings::Printf("%010lld", env()->NowMicros()));
   }
 
   void TearDown() override {

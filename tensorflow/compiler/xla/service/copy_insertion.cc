@@ -975,9 +975,8 @@ Status CopyInsertion::AddCopiesToResolveInterference(HloModule* module) {
   TF_ASSIGN_OR_RETURN(std::unique_ptr<HloAliasAnalysis> alias_analysis,
                       HloAliasAnalysis::Run(module, can_share_buffer_));
 
-  for (HloComputation* computation : module->MakeComputationPostOrder()) {
-    for (HloInstruction* instruction :
-         computation->MakeInstructionPostOrder()) {
+  for (HloComputation* computation : module->computations()) {
+    for (HloInstruction* instruction : computation->instructions()) {
       if (instruction->opcode() == HloOpcode::kWhile) {
         TF_RETURN_IF_ERROR(AddCopiesForWhile(*alias_analysis, instruction));
       } else if (instruction->opcode() == HloOpcode::kConditional) {

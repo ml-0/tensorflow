@@ -34,15 +34,13 @@ class AveragePoolingOpModel : public SingleOpModelWithHexagon {
     BuildInterpreter({GetShape(input_)});
   }
 
-  template <typename T>
-  void SetInput(const std::vector<float>& data) {
-    QuantizeAndPopulate<T>(input_, data);
+  void SetInput(std::initializer_list<float> data) {
+    QuantizeAndPopulate<uint8_t>(input_, data);
   }
 
-  template <typename T>
   std::vector<float> GetDequantizedOutput() {
-    return Dequantize<T>(ExtractVector<T>(output_), GetScale(output_),
-                         GetZeroPoint(output_));
+    return Dequantize<uint8_t>(ExtractVector<uint8_t>(output_),
+                               GetScale(output_), GetZeroPoint(output_));
   }
 
  private:
@@ -55,7 +53,7 @@ TEST(QuantizedPoolingOpTest, AveragePool) {
       /*input=*/{TensorType_UINT8, {1, 16, 8, 1}, 0, 10},
       /*filter_width=*/8, /*filter_height=*/8,
       /*output=*/{TensorType_UINT8, {}, 0, 10});
-  m.SetInput<uint8_t>({
+  m.SetInput({
       0, 6, 2,  4, 0, 6, 2,  4,  //
       3, 2, 10, 7, 3, 2, 10, 7,  //
       0, 6, 2,  4, 0, 6, 2,  4,  //
@@ -75,42 +73,9 @@ TEST(QuantizedPoolingOpTest, AveragePool) {
   });
   m.ApplyDelegateAndInvoke();
 
-  EXPECT_THAT(m.GetDequantizedOutput<uint8_t>(),
+  EXPECT_THAT(m.GetDequantizedOutput(),
               ElementsAreArray(ArrayFloatNear(
                   {4.58824, 4.58824, 4.90196, 4.58824, 4.27451})));
-}
-
-TEST(QuantizedPoolingOpTest, AveragePool_Int8) {
-  AveragePoolingOpModel m(
-      /*input=*/{TensorType_INT8, {1, 16, 8, 1}, 0, 10},
-      /*filter_width=*/8, /*filter_height=*/8,
-      /*output=*/{TensorType_INT8, {}, 0, 10});
-  m.SetInput<int8_t>({
-      0, 6, 2,  4, 0, 6, 2,  4,  //
-      3, 2, 10, 7, 3, 2, 10, 7,  //
-      0, 6, 2,  4, 0, 6, 2,  4,  //
-      3, 2, 10, 7, 3, 2, 10, 7,  //
-      0, 6, 2,  4, 0, 6, 2,  4,  //
-      3, 2, 10, 7, 3, 2, 10, 7,  //
-      3, 2, 10, 7, 3, 2, 10, 7,  //
-      3, 2, 10, 7, 3, 2, 10, 7,  //
-      0, 6, 2,  4, 0, 6, 2,  4,  //
-      3, 2, 10, 7, 3, 2, 10, 7,  //
-      3, 2, 10, 7, 3, 2, 10, 7,  //
-      3, 2, 10, 7, 3, 2, 10, 7,  //
-      0, 6, 2,  4, 0, 6, 2,  4,  //
-      0, 6, 2,  4, 0, 6, 2,  4,  //
-      0, 6, 2,  4, 0, 6, 2,  4,  //
-      3, 2, 10, 7, 3, 2, 10, 7,  //
-  });
-
-  // Reference data.
-  m.Invoke();
-  auto reference_output = m.GetDequantizedOutput<int8_t>();
-
-  m.ApplyDelegateAndInvoke();
-  EXPECT_THAT(m.GetDequantizedOutput<int8_t>(),
-              ElementsAreArray(ArrayFloatNear(reference_output)));
 }
 
 }  // namespace tflite

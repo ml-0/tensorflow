@@ -114,19 +114,17 @@ using AttrToInputsMap =
     tensorflow::gtl::FlatMap<string,
                              tensorflow::gtl::InlinedVector<InputInfo, 4>>;
 
+tensorflow::mutex all_attr_to_input_maps_lock(tensorflow::LINKER_INITIALIZED);
 tensorflow::gtl::FlatMap<string, AttrToInputsMap*>* GetAllAttrToInputsMaps() {
   static auto* all_attr_to_input_maps =
       new tensorflow::gtl::FlatMap<string, AttrToInputsMap*>;
   return all_attr_to_input_maps;
 }
 
-// This function doesn't use a lock, since we depend on the GIL directly.
-AttrToInputsMap* GetAttrToInputsMapHoldingGIL(const tensorflow::OpDef& op_def) {
-#if PY_MAJOR_VERSION >= 3 && PY_MINOR_VERSION >= 4
-  DCHECK(PyGILState_Check())
-      << "This function needs to hold the GIL when called.";
-#endif
+AttrToInputsMap* GetAttrToInputsMap(const tensorflow::OpDef& op_def) {
+  tensorflow::mutex_lock l(all_attr_to_input_maps_lock);
   auto* all_attr_to_input_maps = GetAllAttrToInputsMaps();
+
   auto* output =
       tensorflow::gtl::FindPtrOrNull(*all_attr_to_input_maps, op_def.name());
   if (output != nullptr) {
@@ -152,7 +150,8 @@ AttrToInputsMap* GetAttrToInputsMapHoldingGIL(const tensorflow::OpDef& op_def) {
   return retval;
 }
 
-// This function doesn't use a lock, since we depend on the GIL directly.
+tensorflow::mutex all_attr_to_defaults_maps_lock(
+    tensorflow::LINKER_INITIALIZED);
 tensorflow::gtl::FlatMap<
     string, tensorflow::gtl::FlatMap<string, tensorflow::DataType>*>*
 GetAllAttrToDefaultsMaps() {
@@ -161,13 +160,11 @@ GetAllAttrToDefaultsMaps() {
   return all_attr_to_defaults_maps;
 }
 
-tensorflow::gtl::FlatMap<string, tensorflow::DataType>*
-GetAttrToDefaultsMapHoldingGIL(const tensorflow::OpDef& op_def) {
-#if PY_MAJOR_VERSION >= 3 && PY_MINOR_VERSION >= 4
-  DCHECK(PyGILState_Check())
-      << "This function needs to hold the GIL when called.";
-#endif
+tensorflow::gtl::FlatMap<string, tensorflow::DataType>* GetAttrToDefaultsMap(
+    const tensorflow::OpDef& op_def) {
+  tensorflow::mutex_lock l(all_attr_to_defaults_maps_lock);
   auto* all_attr_to_defaults_maps = GetAllAttrToDefaultsMaps();
+
   auto* output =
       tensorflow::gtl::FindPtrOrNull(*all_attr_to_defaults_maps, op_def.name());
   if (output != nullptr) {
@@ -798,7 +795,7 @@ PyObject* GetPythonObjectFromInt(int num) {
 
 // Python subclass of Exception that is created on not ok Status.
 tensorflow::mutex exception_class_mutex(tensorflow::LINKER_INITIALIZED);
-PyObject* exception_class TF_GUARDED_BY(exception_class_mutex) = nullptr;
+PyObject* exception_class GUARDED_BY(exception_class_mutex) = nullptr;
 
 // Python subclass of Exception that is created to signal fallback.
 PyObject* fallback_exception_class = nullptr;
@@ -1443,7 +1440,7 @@ class GradientTape
   bool watch_accessed_variables_;
   tensorflow::mutex watched_variables_mu_;
   std::set<IdAndVariable, CompareById> watched_variables_
-      TF_GUARDED_BY(watched_variables_mu_);
+      GUARDED_BY(watched_variables_mu_);
 };
 
 typedef tensorflow::eager::ForwardAccumulator<PyObject, PyBackwardFunction,
@@ -3417,8 +3414,8 @@ PyObject* TFE_Py_FastPathExecute_C(PyObject* args) {
     return nullptr;
   }
 
-  op_exec_info.attr_to_inputs_map = GetAttrToInputsMapHoldingGIL(*op_def);
-  op_exec_info.default_dtypes = GetAttrToDefaultsMapHoldingGIL(*op_def);
+  op_exec_info.attr_to_inputs_map = GetAttrToInputsMap(*op_def);
+  op_exec_info.default_dtypes = GetAttrToDefaultsMap(*op_def);
 
   // Mapping of attr name to size - used to calculate the number of values
   // to be expected by the TFE_Execute run.
@@ -3927,6 +3924,8 @@ tensorflow::Status TFE_Py_EncodeArgHelper(PyObject* arg,
 // `include_tensor_ranks_only` allows caching on arguments excluding shape info,
 // so that a slow path using relaxed shape can rely on a cache key that excludes
 // shapes.
+//
+// TODO(nareshmodi): Add support for sparse tensors.
 PyObject* TFE_Py_EncodeArg(PyObject* arg, bool include_tensor_ranks_only) {
   EncodeResult result;
   const auto status =

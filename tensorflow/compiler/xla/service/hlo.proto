@@ -358,11 +358,6 @@ message DynamicParameterBindingProto {
   repeated Binding entries = 1;
 }
 
-message CrossProgramPrefetch {
-  int64 parameter = 1;
-  repeated int64 index = 2;
-}
-
 // Serialization of HloModule.
 message HloModuleProto {
   string name = 1;
@@ -386,8 +381,6 @@ message HloModuleProto {
   HloInputOutputAliasProto input_output_alias = 8;
 
   DynamicParameterBindingProto dynamic_parameter_binding = 9;
-
-  repeated CrossProgramPrefetch cross_program_prefetches = 10;
 }
 
 // Serialization of LogicalBuffer.

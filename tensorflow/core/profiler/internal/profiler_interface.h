@@ -38,9 +38,6 @@ struct ProfilerOptions {
 
   // Inexpensive ops are not traced by default.
   int host_tracer_level = 2;
-
-  // Whether to enable python function calls tracer.
-  bool enable_python_tracer = false;
 };
 
 // Interface for tensorflow profiler plugins.
@@ -61,7 +58,7 @@ class ProfilerInterface {
   // Stops profiling.
   virtual Status Stop() = 0;
 
-  // Saves collected profile data into run_metadata.
+  // Saves collected profile data into step_stats_collector.
   // After this or the overload below are called once, subsequent calls might
   // return empty data.
   virtual Status CollectData(RunMetadata* run_metadata) = 0;

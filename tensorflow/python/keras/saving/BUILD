@@ -4,11 +4,7 @@
 load("//tensorflow:tensorflow.bzl", "tf_py_test")
 
 package(
-    # TODO(scottzhu): Remove non-keras deps from TF.
-    default_visibility = [
-        "//tensorflow/python/distribute:__pkg__",
-        "//tensorflow/python/keras:__subpackages__",
-    ],
+    default_visibility = ["//visibility:public"],
     licenses = ["notice"],  # Apache 2.0
 )
 
@@ -96,7 +92,6 @@ tf_py_test(
     deps = [
         "//tensorflow/python:client_testlib",
         "//tensorflow/python/keras",
-        "//tensorflow/python/keras:combinations",
         "//third_party/py/numpy",
         "@absl_py//absl/testing:parameterized",
     ],
@@ -111,7 +106,6 @@ tf_py_test(
         "//tensorflow/python:client_testlib",
         "//tensorflow/python/feature_column:feature_column_v2",
         "//tensorflow/python/keras",
-        "//tensorflow/python/keras:combinations",
         "//third_party/py/numpy",
         "@absl_py//absl/testing:parameterized",
     ],
@@ -142,14 +136,12 @@ tf_py_test(
     python_version = "PY3",
     shard_count = 4,
     tags = [
-        "no_rocm",
         "no_windows",
     ],
     deps = [
         "//tensorflow/python:client_testlib",
         "//tensorflow/python/distribute:mirrored_strategy",
         "//tensorflow/python/keras",
-        "//tensorflow/python/keras:combinations",
         "//third_party/py/numpy",
         "@absl_py//absl/testing:parameterized",
     ],
@@ -164,7 +156,6 @@ tf_py_test(
     deps = [
         "//tensorflow/python:client_testlib",
         "//tensorflow/python/keras",
-        "//tensorflow/python/keras:combinations",
         "//third_party/py/numpy",
         "@absl_py//absl/testing:parameterized",
     ],

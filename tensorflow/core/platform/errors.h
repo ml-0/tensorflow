@@ -45,7 +45,7 @@ namespace internal {
 // able to completely remove PrepareForStrCat().
 template <typename T>
 typename std::enable_if<!std::is_constructible<strings::AlphaNum, T>::value,
-                        std::string>::type
+                        string>::type
 PrepareForStrCat(const T& t) {
   std::stringstream ss;
   ss << t;
@@ -126,32 +126,29 @@ DECLARE_ERROR(Unauthenticated, UNAUTHENTICATED)
 // Note: The pattern below determines the regex _NODEDEF_NAME_RE in the file
 // tensorflow/python/client/session.py
 // LINT.IfChange
-inline std::string FormatNodeNameForError(const std::string& name) {
+inline string FormatNodeNameForError(const string& name) {
   return strings::StrCat("{{node ", name, "}}");
 }
 // LINT.ThenChange(//tensorflow/python/client/session.py)
 template <typename T>
-std::string FormatNodeNamesForError(const T& names) {
-  return absl::StrJoin(
-      names, ", ", [](std::string* output, const std::string& s) {
-        ::tensorflow::strings::StrAppend(output, FormatNodeNameForError(s));
-      });
+string FormatNodeNamesForError(const T& names) {
+  return absl::StrJoin(names, ", ", [](string* output, const string& s) {
+    ::tensorflow::strings::StrAppend(output, FormatNodeNameForError(s));
+  });
 }
 // LINT.IfChange
-inline std::string FormatColocationNodeForError(const std::string& name) {
+inline string FormatColocationNodeForError(const string& name) {
   return strings::StrCat("{{colocation_node ", name, "}}");
 }
 // LINT.ThenChange(//tensorflow/python/framework/error_interpolation.py)
 template <typename T>
-std::string FormatColocationNodeForError(const T& names) {
-  return absl::StrJoin(names, ", ",
-                       [](std::string* output, const std::string& s) {
-                         ::tensorflow::strings::StrAppend(
-                             output, FormatColocationNodeForError(s));
-                       });
+string FormatColocationNodeForError(const T& names) {
+  return absl::StrJoin(names, ", ", [](string* output, const string& s) {
+    ::tensorflow::strings::StrAppend(output, FormatColocationNodeForError(s));
+  });
 }
 
-inline std::string FormatFunctionForError(const std::string& name) {
+inline string FormatFunctionForError(const string& name) {
   return strings::StrCat("{{function_node ", name, "}}");
 }
 

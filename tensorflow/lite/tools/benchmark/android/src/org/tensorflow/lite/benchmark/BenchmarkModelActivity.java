@@ -18,7 +18,6 @@ package org.tensorflow.lite.benchmark;
 import android.app.Activity;
 import android.content.Intent;
 import android.os.Bundle;
-import android.os.Trace;
 import android.util.Log;
 
 /** Main {@code Activity} class for the benchmark app. */
@@ -38,9 +37,7 @@ public class BenchmarkModelActivity extends Activity {
     String args = bundle.getString(ARGS_INTENT_KEY_0, bundle.getString(ARGS_INTENT_KEY_1));
     Log.i(TAG, "Running TensorFlow Lite benchmark with args: " + args);
 
-    Trace.beginSection("TFLite Benchmark Model");
     BenchmarkModel.run(args);
-    Trace.endSection();
 
     finish();
   }

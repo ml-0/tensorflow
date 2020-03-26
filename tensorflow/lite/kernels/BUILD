@@ -182,7 +182,7 @@ cc_library(
         "//tensorflow/lite/testing:util",
         "//tensorflow/lite/tools/optimize:quantization_utils",
         "//tensorflow/lite/tools/optimize/sparsity:format_converter",
-        "//tensorflow/lite/tools/versioning",
+        "//tensorflow/lite/tools/versioning:op_version",
         "@com_google_googletest//:gtest",
     ],
 )
@@ -426,7 +426,6 @@ cc_library(
         "arg_min_max.cc",
         "audio_spectrogram.cc",
         "basic_rnn.cc",
-        "batch_matmul.cc",
         "batch_to_space_nd.cc",
         "bidirectional_sequence_lstm.cc",
         "bidirectional_sequence_rnn.cc",
@@ -527,7 +526,7 @@ cc_library(
         ":lstm_shared",
         ":op_macros",
         ":padding",
-        "//tensorflow/lite:framework_lib",
+        "//tensorflow/lite:framework",
         "//tensorflow/lite:minimal_logging",
         "//tensorflow/lite:string_util",
         "//tensorflow/lite/c:common",
@@ -550,6 +549,7 @@ cc_library(
         "@farmhash_archive//:farmhash",
         "@flatbuffers",
     ],
+    alwayslink = 1,
 )
 
 cc_library(
@@ -629,28 +629,6 @@ cc_library(
     copts = tflite_copts(),
 )
 
-# For internal usage by shared libraries only.
-cc_library(
-    name = "builtin_ops_all_linked",
-    srcs = ["register.cc"],
-    hdrs = [
-        "builtin_op_kernels.h",
-        "fully_connected.h",
-        "register.h",
-    ],
-    copts = tflite_copts(),
-    # Limit visibility to TFLite only.
-    visibility = [
-        "//tensorflow/lite:__subpackages__",
-    ],
-    deps = [
-        ":builtin_op_kernels",
-        "//tensorflow/lite:framework",
-        "//tensorflow/lite/c:common",
-    ],
-    alwayslink = 1,
-)
-
 cc_library(
     name = "builtin_ops",
     srcs = ["register.cc"],
@@ -659,11 +637,13 @@ cc_library(
         "fully_connected.h",
         "register.h",
     ],
+    copts = tflite_copts(),
     deps = [
         ":builtin_op_kernels",
-        "//tensorflow/lite:framework_lib",
+        "//tensorflow/lite:framework",
         "//tensorflow/lite/c:common",
     ],
+    alwayslink = 1,
 )
 
 # The builtin_ops target will resolve to optimized kernels when available. This
@@ -841,19 +821,6 @@ cc_test(
     size = "small",
     srcs = ["batch_to_space_nd_test.cc"],
     tags = ["tflite_nnapi"],
-    deps = [
-        ":builtin_ops",
-        ":test_main",
-        ":test_util",
-        "//tensorflow/lite:framework",
-        "@com_google_googletest//:gtest",
-    ],
-)
-
-cc_test(
-    name = "batch_matmul_test",
-    size = "small",
-    srcs = ["batch_matmul_test.cc"],
     deps = [
         ":builtin_ops",
         ":test_main",

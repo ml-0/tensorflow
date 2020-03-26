@@ -70,12 +70,7 @@ TF_LITE_MICRO_TEST(TestInvoke) {
 
   tflite::MicroInterpreter interpreter(model, resolver, tensor_arena,
                                        TENSOR_ARENA_SIZE, error_reporter);
-
-  TfLiteStatus allocate_status = interpreter.AllocateTensors();
-  if (allocate_status != kTfLiteOk) {
-    TF_LITE_REPORT_ERROR(error_reporter, "Tensor allocation failed\n");
-  }
-  TF_LITE_MICRO_EXPECT_EQ(kTfLiteOk, allocate_status);
+  interpreter.AllocateTensors();
 
   TfLiteTensor* input = interpreter.input(0);
   memcpy(input->data.uint8, input_data, input->bytes);

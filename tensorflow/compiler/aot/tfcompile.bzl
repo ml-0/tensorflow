@@ -26,7 +26,6 @@ def tf_library(
         name,
         graph,
         config,
-        debug_info = None,
         freeze_checkpoint = None,
         freeze_saver = None,
         cpp_class = None,
@@ -192,15 +191,12 @@ def tf_library(
 
     mlir_flag = "--mlir_components=" + mlir_components
 
-    srcs = [tfcompile_graph, config]
-    debug_info_flag = ""
-    if debug_info:
-        srcs.append(debug_info)
-        debug_info_flag = " --debug_info=$(location " + debug_info + ")"
-
     native.genrule(
         name = ("gen_" + name),
-        srcs = srcs,
+        srcs = [
+            tfcompile_graph,
+            config,
+        ],
         outs = [
             header_file,
             metadata_object_file,
@@ -210,7 +206,6 @@ def tf_library(
             "CUDA_VISIBLE_DEVICES='' " +
             "$(location " + tfcompile_tool + ")" +
             " --graph=$(location " + tfcompile_graph + ")" +
-            debug_info_flag +
             " --config=$(location " + config + ")" +
             " --entry_point=" + ep +
             " --cpp_class=" + cpp_class +
@@ -242,7 +237,10 @@ def tf_library(
     session_module_pb = name + "_session_module.pb"
     native.genrule(
         name = (name + "_session_module"),
-        srcs = srcs,
+        srcs = [
+            tfcompile_graph,
+            config,
+        ],
         outs = [
             session_module_pb,
         ],
@@ -250,7 +248,6 @@ def tf_library(
             "CUDA_VISIBLE_DEVICES='' " +
             "$(location " + tfcompile_tool + ")" +
             " --graph=$(location " + tfcompile_graph + ")" +
-            debug_info_flag +
             " --config=$(location " + config + ")" +
             " --entry_point=" + ep +
             " --cpp_class=" + cpp_class +

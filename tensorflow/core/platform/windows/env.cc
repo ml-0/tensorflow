@@ -44,7 +44,7 @@ namespace {
 mutex name_mutex(tensorflow::LINKER_INITIALIZED);
 
 std::map<std::thread::id, string>& GetThreadNameRegistry()
-    TF_EXCLUSIVE_LOCKS_REQUIRED(name_mutex) {
+    EXCLUSIVE_LOCKS_REQUIRED(name_mutex) {
   static auto* thread_name_registry = new std::map<std::thread::id, string>();
   return *thread_name_registry;
 }

@@ -871,10 +871,7 @@ py_test(
     srcs = ["lib/source_utils_test.py"],
     python_version = "PY3",
     srcs_version = "PY2AND3",
-    tags = [
-        "no_oss_py38",  #TODO(b/151449908)
-        "no_windows",
-    ],
+    tags = ["no_windows"],
     deps = [
         ":debug_data",
         ":debug_utils",
@@ -929,7 +926,6 @@ py_test(
     srcs = ["wrappers/framework_test.py"],
     python_version = "PY3",
     srcs_version = "PY2AND3",
-    tags = ["no_rocm"],
     deps = [
         ":debug_data",
         ":framework",
@@ -1150,7 +1146,6 @@ py_test(
     srcs = ["cli/debugger_cli_common_test.py"],
     python_version = "PY3",
     srcs_version = "PY2AND3",
-    tags = ["no_rocm"],
     deps = [
         ":debugger_cli_common",
         "//tensorflow/python:framework_test_lib",

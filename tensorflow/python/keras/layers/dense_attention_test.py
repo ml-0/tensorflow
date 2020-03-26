@@ -18,21 +18,19 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from absl.testing import parameterized
 import numpy as np
 
 from tensorflow.python import keras
 from tensorflow.python.eager import context
 from tensorflow.python.framework import test_util
-from tensorflow.python.keras import combinations
 from tensorflow.python.keras.layers import core
 from tensorflow.python.keras.layers import dense_attention
 from tensorflow.python.ops import array_ops
 from tensorflow.python.platform import test
 
 
-@combinations.generate(combinations.combine(mode=['graph', 'eager']))
-class BaseDenseAttentionTest(test.TestCase, parameterized.TestCase):
+@test_util.run_all_in_graph_and_eager_modes
+class BaseDenseAttentionTest(test.TestCase):
 
   def test_one_dim_with_mask(self):
     # Scores tensor of shape [1, 1, 1]
@@ -152,8 +150,8 @@ class BaseDenseAttentionTest(test.TestCase, parameterized.TestCase):
     self.assertEqual(new_layer.causal, True)
 
 
-@combinations.generate(combinations.combine(mode=['graph', 'eager']))
-class AttentionTest(test.TestCase, parameterized.TestCase):
+@test_util.run_all_in_graph_and_eager_modes
+class AttentionTest(test.TestCase):
 
   def test_calculate_scores_one_dim(self):
     # Query tensor of shape [1, 1, 1]
@@ -472,8 +470,8 @@ class AttentionTest(test.TestCase, parameterized.TestCase):
     self.assertEqual(new_layer.use_scale, True)
 
 
-@combinations.generate(combinations.combine(mode=['graph', 'eager']))
-class AdditiveAttentionTest(test.TestCase, parameterized.TestCase):
+@test_util.run_all_in_graph_and_eager_modes
+class AdditiveAttentionTest(test.TestCase):
 
   def test_calculate_scores_one_dim(self):
     # Query tensor of shape [1, 1, 1]
@@ -718,8 +716,8 @@ class AdditiveAttentionTest(test.TestCase, parameterized.TestCase):
     self.assertEqual(new_layer.use_scale, True)
 
 
-@combinations.generate(combinations.combine(mode=['graph', 'eager']))
-class LowerTriangularMaskTest(test.TestCase, parameterized.TestCase):
+@test_util.run_all_in_graph_and_eager_modes
+class LowerTriangularMaskTest(test.TestCase):
 
   def test_square_shape(self):
     actual = dense_attention._lower_triangular_mask([3, 3])

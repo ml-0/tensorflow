@@ -7,9 +7,6 @@ exports_files(["test_linux_binary.sh"])
 
 cc_library(
     name = "micro_test",
-    srcs = [
-        "test_utils.cc",
-    ],
     hdrs = [
         "micro_test.h",
         "test_utils.h",
@@ -17,20 +14,7 @@ cc_library(
     deps = [
         "//tensorflow/lite/c:common",
         "//tensorflow/lite/core/api",
-        "//tensorflow/lite/kernels/internal:compatibility",
         "//tensorflow/lite/micro:micro_framework",
         "//tensorflow/lite/micro:micro_utils",
-    ],
-)
-
-cc_library(
-    name = "micro_benchmark",
-    hdrs = [
-        "micro_benchmark.h",
-    ],
-    deps = [
-        "//tensorflow/lite/c:common",
-        "//tensorflow/lite/micro:micro_framework",
-        "//tensorflow/lite/micro:micro_time",
     ],
 )
