@@ -17,6 +17,7 @@ limitations under the License.
 #include <ostream>
 
 #include "tensorflow/core/framework/common_shape_fns.h"
+#include "tensorflow/core/framework/kernel_shape_util.h"
 #include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/framework/shape_inference.h"
 #include "tensorflow/core/framework/tensor.pb.h"
@@ -193,8 +194,7 @@ Status SetOutputShapeForReshape(InferenceContext* c) {
     c->set_output(0, out);
     return Status::OK();
   }
-
-  if (c->RankKnown(out) && c->RankKnown(in)) {
+  if (c->RankKnown(in)) {
     // We don't know the number of output elements, but we can try to infer
     // the missing dimension.
     bool too_many_unknown = false;

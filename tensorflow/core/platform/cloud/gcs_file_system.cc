@@ -357,7 +357,7 @@ class BufferedGcsRandomAccessFile : public RandomAccessFile {
 
  private:
   Status FillBuffer(uint64 start) const
-      EXCLUSIVE_LOCKS_REQUIRED(buffer_mutex_) {
+      TF_EXCLUSIVE_LOCKS_REQUIRED(buffer_mutex_) {
     buffer_start_ = start;
     buffer_.resize(buffer_size_);
     StringPiece str_piece;
@@ -381,9 +381,9 @@ class BufferedGcsRandomAccessFile : public RandomAccessFile {
   mutable mutex buffer_mutex_;
 
   // Offset of buffer from start of the file.
-  mutable uint64 buffer_start_ GUARDED_BY(buffer_mutex_);
+  mutable uint64 buffer_start_ TF_GUARDED_BY(buffer_mutex_);
 
-  mutable string buffer_ GUARDED_BY(buffer_mutex_);
+  mutable string buffer_ TF_GUARDED_BY(buffer_mutex_);
 };
 
 /// \brief GCS-based implementation of a writeable file.
@@ -1331,7 +1331,7 @@ Status GcsFileSystem::GetMatchingPaths(const string& pattern,
         // Find the fixed prefix by looking for the first wildcard.
         const string& fixed_prefix =
             pattern.substr(0, pattern.find_first_of("*?[\\"));
-        const string dir(io::Dirname(fixed_prefix));
+        const string dir(this->Dirname(fixed_prefix));
         if (dir.empty()) {
           return errors::InvalidArgument(
               "A GCS pattern doesn't have a bucket name: ", pattern);
@@ -1345,8 +1345,8 @@ Status GcsFileSystem::GetMatchingPaths(const string& pattern,
 
         // Match all obtained paths to the input pattern.
         for (const auto& path : files_and_folders) {
-          const string& full_path = io::JoinPath(dir, path);
-          if (Env::Default()->MatchPath(full_path, pattern)) {
+          const string& full_path = this->JoinPath(dir, path);
+          if (this->Match(full_path, pattern)) {
             results->push_back(full_path);
           }
         }

@@ -120,14 +120,29 @@ void EagerClusterFunctionLibraryRuntime::Run(
     const FunctionLibraryRuntime::Options& opts,
     FunctionLibraryRuntime::LocalHandle handle, gtl::ArraySlice<Tensor> args,
     std::vector<Tensor>* rets, FunctionLibraryRuntime::DoneCallback done) {
-  done(errors::Unimplemented("Not implemented"));
+    FunctionLibraryRuntime::Options opts_copy = opts;
+    if (!opts_copy.op_id.has_value()) {
+      opts_copy.op_id = ctx_->RemoteMgr()->NextOpId();
+    }
+    std::vector<FunctionArg> function_args;
+    for (const auto& tensor : args) {
+      function_args.push_back(tensor);
+    }
+    Run(opts_copy, handle, function_args, rets, std::move(done));
 }
 
 void EagerClusterFunctionLibraryRuntime::Run(
     const FunctionLibraryRuntime::Options& opts,
     FunctionLibraryRuntime::LocalHandle handle,
-    std::vector<eager::RemoteTensorHandle>* args,
+    gtl::ArraySlice<FunctionArg> args, std::vector<Tensor>* rets,
     FunctionLibraryRuntime::DoneCallback done) {
+  if (!rets->empty()) {
+    // TODO(b/150963957): Support remote outputs which are passed as Tensors.
+    done(errors::Unimplemented(
+        "Not implemented. Users could set the output devices in "
+        "FunctionLibraryRuntime::Options to the default multi-device "
+        "function device as a workaround."));
+  }
   FunctionData* function_data = nullptr;
   {
     mutex_lock l(mu_);
@@ -158,9 +173,17 @@ void EagerClusterFunctionLibraryRuntime::Run(
   eager::EnqueueRequest* request = new eager::EnqueueRequest;
   request->set_context_id(context_id_);
   eager::Operation* remote_op = request->add_queue()->mutable_operation();
-  for (size_t i = 0; i < args->size(); ++i) {
-    remote_op->add_inputs()->Swap(&(*args)[i]);
+
+  for (const auto& arg : args) {
+    if (arg.index() == 0) {
+      absl::get<Tensor>(arg).AsProtoTensorContent(
+          remote_op->add_op_inputs()->mutable_tensor());
+    } else {
+      remote_op->add_op_inputs()->mutable_remote_handle()->Swap(
+          absl::get<RemoteTensorHandle*>(arg));
+    }
   }
+
   // The remote component function should use the same op_id as its parent
   // multi-device function's in order to get the global unique op_id generated
   // by the master context.
