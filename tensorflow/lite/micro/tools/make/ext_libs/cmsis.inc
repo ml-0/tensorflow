@@ -118,14 +118,4 @@ ifneq ($(filter cmsis-nn,$(ALL_TAGS)),)
       $(CMSIS_PATH)CMSIS/DSP/Include/dsp/interpolation_functions.h \
       $(CMSIS_PATH)CMSIS/DSP/Include/dsp/matrix_functions.h
 
-
-    # Need to add the CMSIS Core includes path.
-    # All other CMSIS header files are included with their relative path
-    # in the CMSIS-NN micro kernel source files in
-    # tensorflow/lite/micro/kernels/cmsis-nn
-    INCLUDES += \
-      -I$(CMSIS_PATH)/CMSIS/Core/Include \
-      -I$(CMSIS_PATH)/CMSIS/DSP/Include \
-      -I$(CMSIS_PATH)/CMSIS/NN/Include
-
 endif
